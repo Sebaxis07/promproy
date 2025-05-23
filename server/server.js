@@ -19,7 +19,7 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:5173', // URL de tu frontend
+  origin: ['http://localhost:5173', 'http://localhost:5174'], // Permitir múltiples orígenes
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']

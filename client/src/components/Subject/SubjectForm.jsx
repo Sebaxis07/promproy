@@ -1,5 +1,5 @@
 // src/components/Subject/SubjectForm.jsx
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -23,74 +23,570 @@ import {
   FaClipboardList,
   FaCog,
   FaQuestion,
-  FaRegClock,
+  FaClock,
   FaClipboardCheck,
   FaCalculator,
-  FaGraduationCap as FaGradCap
+  FaUserGraduate,
+  FaChevronRight,
+  FaRocket,
+  FaTrophy,
+  FaLightbulb,
+  FaEye,
+  FaChartPie,
+  FaGem,
+  FaCrown,
+  FaStar,
+  FaBolt,
+  FaFire,
+  FaMagic,
+  FaAtom,
+  FaCubes,
+  FaDraftingCompass,
+  FaEdit,
+  FaLayerGroup
 } from 'react-icons/fa';
 
+// Custom Hooks
+const useFormValidation = (watch, evaluations) => {
+  const watchedFields = watch(['name', 'teacher', 'description', 'semester', 'code', 'credits']);
+  
+  return useMemo(() => {
+    let progress = 0;
+    let validations = {
+      basic: { score: 0, max: 100, issues: [] },
+      evaluations: { score: 0, max: 100, issues: [] },
+      advanced: { score: 0, max: 100, issues: [] }
+    };
+
+    // Basic validation
+    if (watchedFields[0]) {
+      validations.basic.score += 60;
+    } else {
+      validations.basic.issues.push('Nombre requerido');
+    }
+    
+    if (watchedFields[1]) validations.basic.score += 20;
+    if (watchedFields[2]) validations.basic.score += 20;
+
+    // Evaluations validation
+    if (evaluations.length > 0) {
+      validations.evaluations.score += 50;
+      const totalWeight = evaluations.reduce((sum, e) => sum + Number(e.weight), 0);
+      if (Math.abs(totalWeight - 100) < 0.001) {
+        validations.evaluations.score += 50;
+      } else {
+        validations.evaluations.issues.push(`Ponderaciones suman ${totalWeight}%, debe ser 100%`);
+      }
+    } else {
+      validations.evaluations.issues.push('Debe tener al menos una evaluación');
+    }
+
+    // Advanced validation
+    if (watchedFields[3]) validations.advanced.score += 30;
+    if (watchedFields[4]) validations.advanced.score += 30;
+    if (watchedFields[5]) validations.advanced.score += 40;
+
+    const totalScore = (validations.basic.score + validations.evaluations.score + validations.advanced.score) / 3;
+    
+    return { progress: totalScore, validations };
+  }, [watchedFields, evaluations]);
+};
+
+// Animated Background Component
+const AnimatedBackground = () => (
+  <div className="fixed inset-0 overflow-hidden pointer-events-none">
+    {/* Floating orbs */}
+    {[...Array(6)].map((_, i) => (
+      <div
+        key={i}
+        className={`absolute rounded-full bg-gradient-to-r ${
+          i % 3 === 0 ? 'from-blue-500/10 to-cyan-500/10' :
+          i % 3 === 1 ? 'from-purple-500/10 to-pink-500/10' :
+          'from-indigo-500/10 to-blue-500/10'
+        } blur-xl animate-pulse`}
+        style={{
+          width: `${200 + Math.random() * 200}px`,
+          height: `${200 + Math.random() * 200}px`,
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 3}s`,
+          animationDuration: `${4 + Math.random() * 2}s`
+        }}
+      />
+    ))}
+    
+    {/* Particle system */}
+    {[...Array(30)].map((_, i) => (
+      <div
+        key={`particle-${i}`}
+        className="absolute w-1 h-1 bg-blue-400/30 rounded-full animate-pulse"
+        style={{
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 3}s`,
+          animationDuration: `${3 + Math.random() * 2}s`
+        }}
+      />
+    ))}
+  </div>
+);
+
+// Progress Ring Component
+const ProgressRing = ({ progress, size = 120, strokeWidth = 8 }) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div className="relative">
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          fill="none"
+          className="text-slate-700"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          className="text-blue-500 transition-all duration-1000 ease-out"
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-2xl font-black text-white">{Math.round(progress)}%</span>
+      </div>
+    </div>
+  );
+};
+
+// Smart Input Component
+const SmartInput = ({ 
+  icon: Icon, 
+  label, 
+  error, 
+  description, 
+  className = "", 
+  ...props 
+}) => (
+  <div className="space-y-3">
+    <label className="block text-sm font-bold text-slate-300 uppercase tracking-wide">
+      {label}
+    </label>
+    <div className="relative group">
+      {Icon && (
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Icon className="h-5 w-5 text-blue-400 group-focus-within:text-blue-300 transition-colors" />
+        </div>
+      )}
+      <input
+        className={`w-full ${Icon ? 'pl-12' : 'pl-4'} pr-4 py-4 bg-slate-800/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:bg-slate-700/50 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all duration-300 backdrop-blur-sm ${
+          error ? 'border-red-400/50 bg-red-500/10' : ''
+        } ${className}`}
+        {...props}
+      />
+      {error && (
+        <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+          <FaExclamationTriangle className="h-4 w-4 text-red-400" />
+        </div>
+      )}
+    </div>
+    {description && (
+      <p className="text-xs text-slate-500 flex items-center">
+        <FaInfoCircle className="w-3 h-3 mr-1" />
+        {description}
+      </p>
+    )}
+    {error && (
+      <p className="text-sm text-red-400 flex items-center">
+        <FaExclamationTriangle className="w-3 h-3 mr-2" />
+        {error}
+      </p>
+    )}
+  </div>
+);
+
+// Evaluation Builder Component
+const EvaluationBuilder = ({ evaluations, setEvaluations, hasExam, examWeight }) => {
+  const [draggedIndex, setDraggedIndex] = useState(null);
+
+  const addEvaluation = () => {
+    const remainingWeight = 100 - evaluations.reduce((sum, e) => sum + Number(e.weight), 0);
+    setEvaluations([
+      ...evaluations, 
+      { 
+        name: `Evaluación ${evaluations.length + 1}`, 
+        weight: Math.max(0, remainingWeight),
+        description: ''
+      }
+    ]);
+  };
+
+  const removeEvaluation = (index) => {
+    if (evaluations.length <= 1) {
+      toast.warning('Debe mantener al menos una evaluación');
+      return;
+    }
+    setEvaluations(evaluations.filter((_, i) => i !== index));
+  };
+
+  const updateEvaluation = (index, field, value) => {
+    const newEvaluations = [...evaluations];
+    newEvaluations[index][field] = field === 'weight' ? Number(value) : value;
+    setEvaluations(newEvaluations);
+  };
+
+  const distributeEvenly = () => {
+    const weight = Math.floor(100 / evaluations.length);
+    const remainder = 100 - (weight * evaluations.length);
+    
+    setEvaluations(evaluations.map((evalu, index) => ({
+      ...evalu,
+      weight: index === 0 ? weight + remainder : weight
+    })));
+  };
+
+  const totalWeight = evaluations.reduce((sum, e) => sum + Number(e.weight), 0);
+  const isValid = Math.abs(totalWeight - 100) < 0.001;
+
+  return (
+    <div className="space-y-6">
+      {/* Header with actions */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-black text-white flex items-center mb-2">
+            <FaLayerGroup className="mr-3 text-blue-400" />
+            Constructor de Evaluaciones
+          </h3>
+          <p className="text-slate-400">Diseña tu sistema de evaluación perfecto</p>
+        </div>
+        
+        <div className="flex items-center space-x-3">
+          <button
+            type="button"
+            onClick={distributeEvenly}
+            className="px-4 py-2 bg-purple-500/20 border border-purple-400/30 text-purple-300 rounded-xl hover:bg-purple-500/30 transition-all duration-300 flex items-center backdrop-blur-sm"
+          >
+            <FaBalanceScale className="mr-2 h-4 w-4" />
+            Equilibrar
+          </button>
+          
+          <button
+            type="button"
+            onClick={addEvaluation}
+            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center shadow-lg"
+          >
+            <FaPlus className="mr-2 h-4 w-4" />
+            Agregar Evaluación
+          </button>
+        </div>
+      </div>
+
+      {/* Weight Distribution Visualization */}
+      <div className="bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-600/30">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-bold text-white">Distribución de Ponderaciones</h4>
+          <div className={`px-4 py-2 rounded-xl font-bold ${
+            isValid 
+              ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-300' 
+              : 'bg-red-500/20 border border-red-400/30 text-red-300'
+          }`}>
+            {totalWeight}% / 100%
+          </div>
+        </div>
+        
+        <div className="space-y-3">
+          <div className="h-4 bg-slate-700 rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-500 ${
+                isValid ? 'bg-gradient-to-r from-emerald-500 to-blue-500' : 'bg-gradient-to-r from-red-500 to-orange-500'
+              }`}
+              style={{ width: `${Math.min(totalWeight, 100)}%` }}
+            />
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            {evaluations.map((evalu, index) => (
+              <div 
+                key={index}
+                className="px-3 py-1 bg-blue-500/20 border border-blue-400/30 rounded-lg text-blue-300 text-sm"
+              >
+                {evalu.name}: {evalu.weight}%
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Evaluation Cards */}
+      <div className="grid gap-4">
+        {evaluations.map((evaluation, index) => (
+          <div 
+            key={index}
+            className="group bg-gradient-to-r from-slate-800/90 to-slate-700/90 backdrop-blur-xl rounded-2xl border border-slate-600/30 hover:border-blue-400/50 transition-all duration-300 overflow-hidden"
+          >
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                {/* Drag Handle */}
+                <div className="lg:col-span-1 flex justify-center">
+                  <div className="w-6 h-6 flex flex-col justify-center space-y-0.5 cursor-move opacity-50 group-hover:opacity-100 transition-opacity">
+                    <div className="w-full h-0.5 bg-slate-500 rounded"></div>
+                    <div className="w-full h-0.5 bg-slate-500 rounded"></div>
+                    <div className="w-full h-0.5 bg-slate-500 rounded"></div>
+                  </div>
+                </div>
+                
+                {/* Name Input */}
+                <div className="lg:col-span-6">
+                  <input
+                    type="text"
+                    value={evaluation.name}
+                    onChange={(e) => updateEvaluation(index, 'name', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all backdrop-blur-sm"
+                    placeholder="Nombre de la evaluación"
+                  />
+                </div>
+                
+                {/* Weight Input */}
+                <div className="lg:col-span-3">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={evaluation.weight}
+                      onChange={(e) => updateEvaluation(index, 'weight', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all backdrop-blur-sm pr-8"
+                    />
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none">
+                      %
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Actions */}
+                <div className="lg:col-span-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => removeEvaluation(index)}
+                    className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-400/30 text-red-400 hover:bg-red-500/30 hover:border-red-400/50 transition-all duration-300 flex items-center justify-center"
+                  >
+                    <FaTrash className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Description */}
+              <div className="mt-4">
+                <textarea
+                  value={evaluation.description || ''}
+                  onChange={(e) => updateEvaluation(index, 'description', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all backdrop-blur-sm resize-none"
+                  rows="2"
+                  placeholder="Descripción opcional de la evaluación..."
+                />
+              </div>
+            </div>
+            
+            {/* Weight Bar */}
+            <div className="h-2 bg-slate-700">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-500"
+                style={{ width: `${evaluation.weight}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Subject Preview Component
+const SubjectPreview = ({ formData, evaluations, hasExam, examWeight, examThreshold }) => {
+  const totalWeight = evaluations.reduce((sum, e) => sum + Number(e.weight), 0);
+  const isValid = Math.abs(totalWeight - 100) < 0.001;
+
+  return (
+    <div className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 backdrop-blur-xl rounded-3xl border border-slate-600/30 p-8 shadow-2xl">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-2xl font-black text-white flex items-center">
+          <FaEye className="mr-3 text-purple-400" />
+          Vista Previa
+        </h3>
+        <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+          isValid ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+        }`}>
+          {isValid ? 'Válido' : 'Revisar'}
+        </div>
+      </div>
+      
+      <div className="space-y-6">
+        {/* Subject Info */}
+        <div className="space-y-3">
+          <h4 className="text-xl font-bold text-white">
+            {formData.name || 'Sin nombre'}
+          </h4>
+          {formData.teacher && (
+            <p className="text-slate-300 flex items-center">
+              <FaUserGraduate className="w-4 h-4 mr-2 text-blue-400" />
+              {formData.teacher}
+            </p>
+          )}
+          {formData.description && (
+            <p className="text-slate-400 text-sm">{formData.description}</p>
+          )}
+        </div>
+        
+        {/* Additional Info */}
+        {(formData.code || formData.semester || formData.credits) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {formData.code && (
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-xs text-slate-500">Código</p>
+                <p className="font-bold text-white">{formData.code}</p>
+              </div>
+            )}
+            {formData.semester && (
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-xs text-slate-500">Semestre</p>
+                <p className="font-bold text-white">{formData.semester}</p>
+              </div>
+            )}
+            {formData.credits && (
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-xs text-slate-500">Créditos</p>
+                <p className="font-bold text-white">{formData.credits}</p>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Evaluations Preview */}
+        <div>
+          <h5 className="font-bold text-white mb-3 flex items-center">
+            <FaChartPie className="w-4 h-4 mr-2 text-blue-400" />
+            Evaluaciones ({evaluations.length})
+          </h5>
+          <div className="space-y-2">
+            {evaluations.map((evalu, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                <span className="text-slate-300 text-sm">{evalu.name}</span>
+                <span className="font-bold text-white">{evalu.weight}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Exam Info */}
+        {hasExam && (
+          <div className="bg-purple-500/10 border border-purple-400/20 rounded-xl p-4">
+            <h5 className="font-bold text-purple-300 mb-2 flex items-center">
+              <FaGraduationCap className="w-4 h-4 mr-2" />
+              Examen Final
+            </h5>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-slate-400">Peso adicional</p>
+                <p className="font-bold text-white">{examWeight}%</p>
+              </div>
+              <div>
+                <p className="text-slate-400">Nota para eximirse</p>
+                <p className="font-bold text-white">{examThreshold}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Main Component
 const SubjectForm = () => {
   const { createSubject, updateSubject, deleteSubject, subjects } = useContext(SubjectContext);
   const { register, handleSubmit, setValue, formState: { errors }, reset, watch } = useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState('basic'); // 'basic', 'evaluations', 'advanced'
-  const [formProgress, setFormProgress] = useState(0);
-  const [hasExam, setHasExam] = useState(true);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [hasExam, setHasExam] = useState(false);
   const [examThreshold, setExamThreshold] = useState(5.0);
-  const [examInfo, setExamInfo] = useState(null);
-  const [examWeight, setExamWeight] = useState(25); // Peso del examen adicional (25%)
+  const [examWeight, setExamWeight] = useState(25);
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // Estado para manejar evaluaciones (formas de evaluación) - ahora sin incluir el examen
   const [evaluations, setEvaluations] = useState([
-    { name: 'Prueba 1', weight: 50 },
-    { name: 'Prueba 2', weight: 50 }
+    { name: 'Prueba 1', weight: 50, description: '' },
+    { name: 'Prueba 2', weight: 50, description: '' }
   ]);
 
-  // Observar los campos del formulario para calcular progreso
-  const watchedFields = watch(['name', 'teacher', 'description', 'semester', 'code', 'credits']);
+  const formData = watch();
+  const { progress, validations } = useFormValidation(watch, evaluations);
 
-  // Cargar datos de la asignatura si estamos en modo edición
+  const steps = [
+    {
+      id: 'basic',
+      title: 'Información Básica',
+      icon: FaBook,
+      description: 'Datos fundamentales de la asignatura'
+    },
+    {
+      id: 'evaluations',
+      title: 'Sistema de Evaluación',
+      icon: FaLayerGroup,
+      description: 'Configura evaluaciones y ponderaciones'
+    },
+    {
+      id: 'exam',
+      title: 'Configuración de Examen',
+      icon: FaGraduationCap,
+      description: 'Establece parámetros del examen final'
+    },
+    {
+      id: 'advanced',
+      title: 'Configuración Avanzada',
+      icon: FaCog,
+      description: 'Detalles adicionales y metadatos'
+    }
+  ];
+
   useEffect(() => {
     if (id && id !== 'new') {
       setIsEditing(true);
       const subject = subjects.find(s => s._id === id);
       
       if (subject) {
-        // Cargar datos básicos
-        setValue('name', subject.name);
-        setValue('teacher', subject.teacher);
-        setValue('description', subject.description);
+        // Populate form fields
+        Object.keys(subject).forEach(key => {
+          if (key !== 'evaluations' && key !== 'hasExam' && key !== 'examWeight' && key !== 'examThreshold') {
+            setValue(key, subject[key]);
+          }
+        });
         
-        // Cargar datos adicionales si existen
-        if (subject.semester) setValue('semester', subject.semester);
-        if (subject.code) setValue('code', subject.code);
-        if (subject.credits) setValue('credits', subject.credits);
-        if (subject.passingGrade) setValue('passingGrade', subject.passingGrade);
-        if (subject.examThreshold) {
-          setExamThreshold(subject.examThreshold);
-          setValue('examThreshold', subject.examThreshold);
-        }
+        // Set exam configuration
+        setHasExam(subject.hasExam || false);
+        setExamWeight(subject.examWeight || 25);
+        setExamThreshold(subject.examThreshold || 5.0);
         
-        // Cargar peso del examen si existe
-        if (subject.examWeight) {
-          setExamWeight(subject.examWeight);
-          setValue('examWeight', subject.examWeight);
-        }
-        
-        // Cargar evaluaciones si existen, excluyendo el examen
+        // Set evaluations
         if (subject.evaluations && subject.evaluations.length > 0) {
-          // Filtrar evaluaciones que no son examen
           const courseEvaluations = subject.evaluations.filter(evalu => 
             !evalu.isExam && !evalu.name.toLowerCase().includes('examen') && !evalu.name.toLowerCase().includes('final')
           );
-          setEvaluations(courseEvaluations);
-          
-          // Verificar si hay examen configurado
-          setHasExam(subject.hasExam || false);
+          setEvaluations(courseEvaluations.length > 0 ? courseEvaluations : [
+            { name: 'Evaluación 1', weight: 100, description: '' }
+          ]);
         }
       } else {
         toast.error('Asignatura no encontrada');
@@ -99,118 +595,21 @@ const SubjectForm = () => {
     }
   }, [id, subjects, setValue, navigate]);
 
-  // Calcular progreso del formulario
-  useEffect(() => {
-    let progress = 0;
-    
-    // Verificar campos básicos
-    if (watchedFields[0]) progress += 30; // Nombre (obligatorio)
-    if (watchedFields[1]) progress += 10; // Profesor
-    if (watchedFields[2]) progress += 10; // Descripción
-    if (watchedFields[3]) progress += 10; // Semestre
-    if (watchedFields[4]) progress += 5; // Código
-    if (watchedFields[5]) progress += 5; // Créditos
-    
-    // Verificar evaluaciones
-    if (evaluations.length > 0 && validateWeights()) {
-      progress += 30;
-    } else if (evaluations.length > 0) {
-      progress += 15;
-    }
-    
-    setFormProgress(progress > 100 ? 100 : progress);
-  }, [watchedFields, evaluations]);
-
-  // Verificar que las ponderaciones sumen 100%
   const validateWeights = () => {
     const totalWeight = evaluations.reduce((sum, evaluation) => sum + Number(evaluation.weight), 0);
-    return Math.abs(totalWeight - 100) < 0.001; // Accounting for floating point precision
+    return Math.abs(totalWeight - 100) < 0.001;
   };
-
-  // Agregar una nueva evaluación
-  const addEvaluation = () => {
-    setEvaluations([...evaluations, { name: `Evaluación ${evaluations.length + 1}`, weight: 0 }]);
-  };
-
-  // Eliminar una evaluación
-  const removeEvaluation = (index) => {
-    if (evaluations.length <= 1) {
-      toast.error('Debe haber al menos una evaluación');
-      return;
-    }
-    
-    const newEvaluations = [...evaluations];
-    newEvaluations.splice(index, 1);
-    setEvaluations(newEvaluations);
-  };
-
-  // Actualizar una evaluación
-  const updateEvaluation = (index, field, value) => {
-    const newEvaluations = [...evaluations];
-    newEvaluations[index][field] = field === 'weight' ? Number(value) : value;
-    setEvaluations(newEvaluations);
-  };
-
-  // Distribuir peso equitativamente
-  const distributeWeightsEvenly = () => {
-    const weight = Math.floor(100 / evaluations.length);
-    const remainder = 100 - (weight * evaluations.length);
-    
-    const newEvaluations = evaluations.map((evalu, index) => ({
-      ...evalu,
-      weight: index === 0 ? weight + remainder : weight
-    }));
-    
-    setEvaluations(newEvaluations);
-  };
-
-  // Calcular nota para eximirse del examen
-  const calculateExamExemption = () => {
-    if (!hasExam) {
-      setExamInfo({
-        status: 'no-exam',
-        message: 'Esta asignatura no tiene examen configurado.'
-      });
-      return;
-    }
-    
-    // En este sistema, el examen es adicional al 100% del curso
-    // Por lo tanto, la nota para eximirse se aplica directamente al promedio final del curso
-    const requiredGradeForExamExemption = examThreshold || 5.0; // Nota para eximirse
-    
-    setExamInfo({
-      status: 'has-exam',
-      examWeight: examWeight,
-      exemptionThreshold: requiredGradeForExamExemption,
-      requiredAverage: requiredGradeForExamExemption.toFixed(1),
-      message: `Para eximirse del examen (${examWeight}% adicional) se necesita un promedio final de ${requiredGradeForExamExemption.toFixed(1)} en las evaluaciones del curso.`
-    });
-  };
-
-  // Actualizar cuando cambian las evaluaciones o el umbral
-  useEffect(() => {
-    if (hasExam) {
-      calculateExamExemption();
-    } else {
-      setExamInfo({
-        status: 'no-exam',
-        message: 'Esta asignatura no tiene examen configurado.'
-      });
-    }
-  }, [evaluations, examThreshold, hasExam, examWeight]);
 
   const onSubmit = async (data) => {
-    // Validar que las ponderaciones sumen 100%
     if (!validateWeights()) {
       toast.error('Las ponderaciones deben sumar exactamente 100%');
-      setActiveTab('evaluations');
+      setCurrentStep(1); // Go to evaluations step
       return;
     }
 
     setIsSubmitting(true);
     
     try {
-      // Agregar las evaluaciones, datos del examen y umbral de examen al formulario
       const subjectData = {
         ...data,
         evaluations,
@@ -219,7 +618,6 @@ const SubjectForm = () => {
         examThreshold: hasExam ? Number(examThreshold) : null
       };
       
-      // Crear o actualizar la asignatura
       let result;
       
       if (isEditing) {
@@ -229,7 +627,7 @@ const SubjectForm = () => {
       }
       
       if (result) {
-        toast.success(`Asignatura ${isEditing ? 'actualizada' : 'creada'} con éxito`);
+        toast.success(`Asignatura ${isEditing ? 'actualizada' : 'creada'} exitosamente`);
         navigate('/subjects');
       }
     } catch (error) {
@@ -251,7 +649,7 @@ const SubjectForm = () => {
       setIsSubmitting(true);
       const success = await deleteSubject(id);
       if (success) {
-        toast.success('Asignatura eliminada con éxito');
+        toast.success('Asignatura eliminada exitosamente');
         navigate('/subjects');
       }
     } catch (error) {
@@ -262,414 +660,246 @@ const SubjectForm = () => {
     }
   };
 
-  // Renderizar el contenido según la pestaña activa
-  const renderTabContent = () => {
-    switch (activeTab) {
+  const renderStepContent = () => {
+    switch (steps[currentStep].id) {
+      case 'basic':
+        return (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <SmartInput
+                icon={FaBook}
+                label="Nombre de la asignatura"
+                placeholder="Ej: Matemáticas Aplicadas"
+                error={errors.name?.message}
+                description="Nombre principal que aparecerá en tu dashboard"
+                {...register('name', { required: 'El nombre es obligatorio' })}
+              />
+              
+              <SmartInput
+                icon={FaUserGraduate}
+                label="Profesor"
+                placeholder="Ej: Dr. Juan Pérez"
+                description="Nombre del profesor a cargo de la asignatura"
+                {...register('teacher')}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold text-slate-300 uppercase tracking-wide mb-3">
+                Descripción
+              </label>
+              <textarea
+                className="w-full px-4 py-4 bg-slate-800/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:bg-slate-700/50 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all duration-300 backdrop-blur-sm resize-none"
+                rows="4"
+                placeholder="Describe el contenido y objetivos de esta asignatura..."
+                {...register('description')}
+              />
+              <p className="text-xs text-slate-500 flex items-center mt-2">
+                <FaInfoCircle className="w-3 h-3 mr-1" />
+                Una descripción clara te ayudará a contextualizar mejor la asignatura
+              </p>
+            </div>
+          </div>
+        );
+        
       case 'evaluations':
         return (
-          <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-2 sm:mb-0">
-                <FaBalanceScale className="mr-2 text-indigo-600" /> Plan de evaluación
-              </h2>
-              
-              <div className="flex space-x-3">
-                <button
-                  type="button"
-                  onClick={distributeWeightsEvenly}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center transition-colors"
-                >
-                  <FaBalanceScale className="mr-1" /> Distribuir pesos equitativamente
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={addEvaluation}
-                  className="text-sm bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 flex items-center transition-colors"
-                >
-                  <FaPlus className="mr-1" /> Agregar
-                </button>
-              </div>
+          <EvaluationBuilder
+            evaluations={evaluations}
+            setEvaluations={setEvaluations}
+            hasExam={hasExam}
+            examWeight={examWeight}
+          />
+        );
+        
+      case 'exam':
+        return (
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-2xl font-black text-white flex items-center mb-4">
+                <FaGraduationCap className="mr-3 text-purple-400" />
+                Configuración de Examen Final
+              </h3>
+              <p className="text-slate-400">Define si la asignatura incluye un examen final adicional</p>
             </div>
-
-            <div className={`rounded-lg p-4 flex items-start ${validateWeights() 
-              ? 'bg-green-50 border border-green-200 text-green-700' 
-              : 'bg-amber-50 border border-amber-200 text-amber-700'}`}
-            >
-              <div className="rounded-full p-2 bg-white mr-3 flex-shrink-0">
-                {validateWeights() 
-                  ? <FaCheckCircle className="text-green-500" /> 
-                  : <FaExclamationTriangle className="text-amber-500" />
-                }
-              </div>
-              <div>
-                <p className="font-medium">{validateWeights() ? 'Plan de evaluación válido' : 'Atención'}</p>
-                <p className="text-sm mt-1">
-                  {validateWeights() 
-                    ? 'Las ponderaciones suman exactamente 100%. Puedes guardar el formulario.'
-                    : 'Las ponderaciones deben sumar exactamente 100%. Ajusta los valores antes de guardar.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Panel de configuración de examen */}
-            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-                <div className="flex items-start">
-                  <div className="form-check">
+            
+            {/* Exam Toggle */}
+            <div className="bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-xl rounded-2xl p-8 border border-slate-600/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="relative">
                     <input
                       type="checkbox"
                       id="hasExam"
-                      className="form-check-input h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mt-1"
+                      className="sr-only"
                       checked={hasExam}
                       onChange={(e) => setHasExam(e.target.checked)}
                     />
-                    <label htmlFor="hasExam" className="form-check-label ml-2 text-indigo-800 font-medium">
-                      Esta asignatura tiene examen final adicional
+                    <label
+                      htmlFor="hasExam"
+                      className="relative flex items-center cursor-pointer select-none"
+                    >
+                      <div className={`w-14 h-8 rounded-full border-2 transition-all duration-300 ${
+                        hasExam 
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 border-blue-400' 
+                          : 'bg-slate-700 border-slate-600'
+                      }`}>
+                        <div className={`w-6 h-6 bg-white rounded-full shadow-lg transform transition-transform duration-300 ${
+                          hasExam ? 'translate-x-6' : 'translate-x-1'
+                        } mt-0.5`} />
+                      </div>
+                      <span className="ml-4 text-white font-bold text-lg">
+                        Incluir Examen Final
+                      </span>
                     </label>
                   </div>
                 </div>
                 
                 {hasExam && (
-                  <div className="mt-3 sm:mt-0 sm:ml-6 flex flex-col sm:flex-row sm:items-center">
-                    <div className="flex items-center mb-2 sm:mb-0 sm:mr-4">
-                      <label htmlFor="examWeight" className="text-sm text-indigo-800 mr-2 whitespace-nowrap">
-                        Peso del examen:
-                      </label>
-                      <input
-                        id="examWeight"
-                        type="number"
-                        min="1"
-                        max="100"
-                        step="1"
-                        className="w-20 px-2 py-1 border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        value={examWeight}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          setExamWeight(val);
-                          setValue('examWeight', val);
-                        }}
-                      />
-                      <span className="ml-1 text-indigo-800">%</span>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <label htmlFor="examThreshold" className="text-sm text-indigo-800 mr-2 whitespace-nowrap">
-                        Nota para eximirse:
-                      </label>
-                      <input
-                        id="examThreshold"
-                        type="number"
-                        min="1"
-                        max="7"
-                        step="0.1"
-                        className="w-20 px-2 py-1 border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        value={examThreshold}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          setExamThreshold(val);
-                          setValue('examThreshold', val);
-                        }}
-                      />
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <FaCheckCircle className="w-5 h-5 text-emerald-400" />
+                    <span className="text-emerald-400 font-bold">Activado</span>
                   </div>
                 )}
               </div>
               
               {hasExam && (
-                <div className="mt-3">
-                  <p className="text-sm text-indigo-700">
-                    <FaInfoCircle className="inline mr-1" /> 
-                    El examen es adicional al 100% del promedio del curso. Los estudiantes podrán eximirse con un promedio de {examThreshold} o superior.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-              <div className="grid grid-cols-10 gap-4 bg-gray-50 px-4 py-3 border-b border-gray-200 font-medium text-gray-700">
-                <div className="col-span-5 sm:col-span-6">Nombre de evaluación</div>
-                <div className="col-span-3 sm:col-span-3">Ponderación (%)</div>
-                <div className="col-span-2 text-center">Acción</div>
-              </div>
-
-              <div className="px-4 py-2 space-y-2 max-h-64 overflow-y-auto">
-                {evaluations.map((evaluation, index) => (
-                  <div key={index} className="grid grid-cols-10 gap-4 items-center py-2 border-b border-gray-100 last:border-0">
-                    <div className="col-span-5 sm:col-span-6">
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        value={evaluation.name}
-                        onChange={(e) => updateEvaluation(index, 'name', e.target.value)}
-                        placeholder="Nombre"
-                      />
-                    </div>
-                    <div className="col-span-3 sm:col-span-3">
+                <div className="mt-8 pt-8 border-t border-slate-600/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-300 uppercase tracking-wide mb-3">
+                        Peso del Examen (%)
+                      </label>
                       <div className="relative">
                         <input
                           type="number"
-                          min="0"
+                          min="1"
                           max="100"
                           step="1"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          value={evaluation.weight}
-                          onChange={(e) => updateEvaluation(index, 'weight', e.target.value)}
+                          value={examWeight}
+                          onChange={(e) => setExamWeight(Number(e.target.value))}
+                          className="w-full px-4 py-4 bg-slate-700/50 border border-slate-600/30 rounded-xl text-white focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all backdrop-blur-sm text-center text-2xl font-bold"
                         />
-                        <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 pointer-events-none">
+                        <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 font-bold">
                           %
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Porcentaje adicional al 100% del curso
+                      </p>
                     </div>
-                    <div className="col-span-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeEvaluation(index)}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors"
-                        title="Eliminar evaluación"
-                      >
-                        <FaTrash />
-                      </button>
+                    
+                    <div>
+                      <label className="block text-sm font-bold text-slate-300 uppercase tracking-wide mb-3">
+                        Nota para Eximirse
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="7"
+                        step="0.1"
+                        value={examThreshold}
+                        onChange={(e) => setExamThreshold(Number(e.target.value))}
+                        className="w-full px-4 py-4 bg-slate-700/50 border border-slate-600/30 rounded-xl text-white focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 focus:outline-none transition-all backdrop-blur-sm text-center text-2xl font-bold"
+                      />
+                      <p className="text-xs text-slate-500 mt-2">
+                        Promedio mínimo para eximirse del examen
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
-                <span className="text-sm text-gray-600">
-                  {evaluations.length} {evaluations.length === 1 ? 'evaluación' : 'evaluaciones'} del curso (100%)
-                </span>
-                <div className="flex items-center bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
-                  <span className="text-gray-700 mr-2">Total:</span>
-                  <span className={`font-bold text-lg ${validateWeights() ? 'text-green-600' : 'text-red-600'}`}>
-                    {evaluations.reduce((sum, evaluationItem) => sum + Number(evaluationItem.weight), 0)}%
-                  </span>
+                  
+                  <div className="mt-8 bg-blue-500/10 border border-blue-400/20 rounded-xl p-6">
+                    <div className="flex items-start space-x-4">
+                      <FaCalculator className="w-6 h-6 text-blue-400 mt-1" />
+                      <div>
+                        <h4 className="font-bold text-blue-300 mb-2">Cómo Funciona el Sistema</h4>
+                        <p className="text-blue-200/80 text-sm leading-relaxed">
+                          Los estudiantes que obtengan un promedio de <strong>{examThreshold}</strong> o superior 
+                          en las evaluaciones del curso se eximen del examen. Quienes no alcancen esta nota 
+                          deberán rendir el examen final que representa un <strong>{examWeight}%</strong> adicional 
+                          de la nota final.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-            
-            {/* Información sobre eximición del examen */}
-            {hasExam && examInfo && examInfo.status === 'has-exam' && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 border border-indigo-100 shadow-sm">
-                <h3 className="text-indigo-800 font-semibold flex items-center mb-3">
-                  <FaCalculator className="mr-2 text-indigo-600" /> Información sobre el examen
-                </h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                  <div className="bg-white p-3 rounded-lg shadow-sm border border-indigo-100">
-                    <p className="text-xs text-indigo-600 font-medium">Nota para eximirse</p>
-                    <p className="text-2xl font-bold text-indigo-700">{examInfo.exemptionThreshold}</p>
-                  </div>
-                  
-                  <div className="bg-white p-3 rounded-lg shadow-sm border border-indigo-100">
-                    <p className="text-xs text-indigo-600 font-medium">Promedio necesario</p>
-                    <p className="text-2xl font-bold text-indigo-700">{examInfo.requiredAverage}</p>
-                  </div>
-                  
-                  <div className="bg-white p-3 rounded-lg shadow-sm border border-indigo-100">
-                    <p className="text-xs text-indigo-600 font-medium">Peso del examen</p>
-                    <p className="text-2xl font-bold text-indigo-700">{examInfo.examWeight}%</p>
-                  </div>
-                </div>
-                
-                <p className="text-indigo-700 text-sm">
-                  <FaInfoCircle className="inline mr-1" /> {examInfo.message}
-                </p>
-              </div>
-            )}
           </div>
         );
-      
+        
       case 'advanced':
         return (
-          <div className="space-y-6 animate-fade-in">
-            <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-              <FaCog className="mr-2 text-indigo-600" /> Configuración avanzada
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="semester">
-                  Semestre académico
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaCalendarAlt className="text-gray-400" />
-                  </div>
-                  <input
-                    id="semester"
-                    type="text"
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Ej: 2025-1"
-                    {...register('semester')}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Formato recomendado: Año-Periodo (Ej: 2025-1, 2024-2)
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="code">
-                  Código de asignatura
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaCode className="text-gray-400" />
-                  </div>
-                  <input
-                    id="code"
-                    type="text"
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Ej: MAT2001"
-                    {...register('code')}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="credits">
-                  Créditos académicos
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaUniversity className="text-gray-400" />
-                  </div>
-                  <input
-                    id="credits"
-                    type="number"
-                    min="1"
-                    max="20"
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Ej: 6"
-                    {...register('credits')}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="passingGrade">
-                  Nota mínima de aprobación
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaCheckCircle className="text-gray-400" />
-                  </div>
-                  <input
-                    id="passingGrade"
-                    type="number"
-                    min="1"
-                    max="7"
-                    step="0.1"
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Ej: 4.0"
-                    defaultValue="4.0"
-                    {...register('passingGrade')}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Valor predeterminado: 4.0 (según sistema chileno)
-                </p>
-              </div>
-            </div>
-            
-            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200 mt-4">
-              <div className="flex items-start">
-                <FaInfoCircle className="text-indigo-600 mt-1 mr-3 flex-shrink-0" />
-                <div>
-                  <p className="text-indigo-800 font-medium">Información avanzada</p>
-                  <p className="text-indigo-600 text-sm mt-1">
-                    Estos campos son opcionales pero te ayudarán a tener un seguimiento más detallado de tu rendimiento académico.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      
-      default: // 'basic'
-        return (
-          <div className="space-y-6 animate-fade-in">
-            <h2 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-              <FaInfoCircle className="mr-2 text-indigo-600" /> Información básica
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">
-                  Nombre de la asignatura*
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500`}
-                  placeholder="Ej: Matemáticas Aplicadas"
-                  {...register('name', { required: 'El nombre es obligatorio' })}
-                />
-                {errors.name && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <FaExclamationTriangle className="mr-1" /> {errors.name.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="teacher">
-                  Profesor
-                  </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaGraduationCap className="text-gray-400" />
-                  </div>
-                  <input
-                    id="teacher"
-                    type="text"
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Ej: Juan Pérez"
-                    {...register('teacher')}
-                  />
-                </div>
-              </div>
-            </div>
-
+          <div className="space-y-8">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="description">
-                Descripción
-              </label>
-              <textarea
-                id="description"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                rows="4"
-                placeholder="Describe brevemente el contenido o propósito de esta asignatura..."
-                {...register('description')}
-              ></textarea>
-              <p className="mt-1 text-xs text-gray-500">
-                Una breve descripción te ayudará a recordar el enfoque y contenido de la asignatura
-              </p>
+              <h3 className="text-2xl font-black text-white flex items-center mb-4">
+                <FaCog className="mr-3 text-blue-400" />
+                Configuración Avanzada
+              </h3>
+              <p className="text-slate-400">Información adicional para un seguimiento profesional</p>
             </div>
             
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 flex items-start">
-              <div className="bg-white rounded-full p-2 mr-3 text-blue-500 flex-shrink-0">
-                <FaQuestion />
-              </div>
-              <div>
-                <p className="text-blue-800 font-medium">Recomendaciones</p>
-                <p className="text-blue-600 text-sm mt-1">
-                  Completa toda la información que puedas para tener un mejor control de tus asignaturas. El nombre es el único campo obligatorio, pero te recomendamos completar también el profesor y la descripción.
-                </p>
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <SmartInput
+                icon={FaCalendarAlt}
+                label="Semestre Académico"
+                placeholder="Ej: 2025-1"
+                description="Formato: Año-Periodo (Ej: 2025-1, 2024-2)"
+                {...register('semester')}
+              />
+              
+              <SmartInput
+                icon={FaCode}
+                label="Código de Asignatura"
+                placeholder="Ej: MAT2001"
+                description="Código oficial de la asignatura"
+                {...register('code')}
+              />
+              
+              <SmartInput
+                icon={FaUniversity}
+                label="Créditos Académicos"
+                type="number"
+                min="1"
+                max="20"
+                placeholder="Ej: 6"
+                description="Número de créditos que otorga la asignatura"
+                {...register('credits')}
+              />
+              
+              <SmartInput
+                icon={FaCheckCircle}
+                label="Nota Mínima de Aprobación"
+                type="number"
+                min="1"
+                max="7"
+                step="0.1"
+                placeholder="4.0"
+                description="Nota mínima requerida para aprobar"
+                {...register('passingGrade')}
+              />
             </div>
           </div>
         );
+        
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-6 flex justify-between items-center">
-          <Link to="/subjects" className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center text-sm font-medium">
-            <FaArrowLeft className="mr-2" /> Volver a la lista de asignaturas
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
+      <AnimatedBackground />
+      
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <Link 
+            to="/subjects" 
+            className="flex items-center px-6 py-3 bg-slate-800/50 hover:bg-slate-700/50 backdrop-blur-xl border border-slate-600/30 text-white rounded-xl transition-all duration-300 transform hover:scale-105"
+          >
+            <FaArrowLeft className="mr-3 h-5 w-5" />
+            <span className="font-bold">Volver a Asignaturas</span>
           </Link>
           
           {isEditing && (
@@ -677,189 +907,179 @@ const SubjectForm = () => {
               type="button"
               onClick={handleDelete}
               disabled={isSubmitting}
-              className={`px-4 py-2 rounded-lg text-sm flex items-center ${
+              className={`px-6 py-3 rounded-xl text-white font-bold transition-all duration-300 flex items-center transform hover:scale-105 ${
                 confirmDelete 
-                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } transition-colors`}
+                  ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg' 
+                  : 'bg-red-500/20 border border-red-400/30 hover:bg-red-500/30'
+              }`}
             >
-              <FaTrash className="mr-2" />
-              {confirmDelete ? '¿Estás seguro?' : 'Eliminar asignatura'}
+              <FaTrash className="mr-2 h-4 w-4" />
+              {confirmDelete ? '¿Confirmar eliminación?' : 'Eliminar Asignatura'}
             </button>
           )}
         </div>
-        
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          {/* Encabezado con progreso */}
-          <div className="bg-gradient-to-br from-indigo-600 to-purple-700 px-8 py-6 relative">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-white flex items-center">
-                  <FaBook className="mr-3" />
-                  {isEditing ? 'Editar Asignatura' : 'Nueva Asignatura'}
-                </h1>
-                <p className="text-indigo-200 mt-1">
-                  {isEditing 
-                    ? 'Actualiza la información y el plan de evaluación' 
-                    : 'Completa los datos para crear tu nueva asignatura'}
-                </p>
-              </div>
-              
-              {/* Indicador de progreso */}
-              <div className="mt-4 md:mt-0 bg-white bg-opacity-20 rounded-lg py-2 px-4 backdrop-blur-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-full md:w-36 h-3 bg-white bg-opacity-20 rounded-full overflow-hidden">
-                    <div 
-                      className="h-3 bg-white transition-all duration-500" 
-                      style={{ width: `${formProgress}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-white text-sm font-medium">{formProgress}%</span>
-                </div>
-                <p className="text-indigo-200 text-xs mt-1">Progreso del formulario</p>
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          {/* Sidebar */}
+          <div className="xl:col-span-3 space-y-6">
+            {/* Progress Card */}
+            <div className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 backdrop-blur-xl rounded-3xl border border-slate-600/30 p-8 text-center shadow-2xl">
+              <ProgressRing progress={progress} />
+              <h3 className="text-lg font-black text-white mt-6 mb-2">Progreso General</h3>
+              <p className="text-slate-400 text-sm">
+                {progress < 30 ? 'Recién comenzando' :
+                 progress < 60 ? 'Avanzando bien' :
+                 progress < 90 ? 'Casi completo' :
+                 '¡Excelente trabajo!'}
+              </p>
+            </div>
+
+            {/* Steps Navigation */}
+            <div className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 backdrop-blur-xl rounded-3xl border border-slate-600/30 p-6 shadow-2xl">
+              <h3 className="text-lg font-black text-white mb-6">Pasos de Configuración</h3>
+              <div className="space-y-3">
+                {steps.map((step, index) => {
+                  const IconComponent = step.icon;
+                  const isActive = index === currentStep;
+                  const isCompleted = validations[step.id]?.score >= 50;
+                  
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => setCurrentStep(index)}
+                      className={`w-full text-left p-4 rounded-xl transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-blue-500/20 to-blue-600/20 border border-blue-400/30 shadow-lg'
+                          : isCompleted
+                            ? 'bg-emerald-500/10 border border-emerald-400/20 hover:bg-emerald-500/20'
+                            : 'bg-slate-700/30 border border-slate-600/20 hover:bg-slate-700/50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className={`p-2 rounded-lg ${
+                          isActive ? 'bg-blue-500' :
+                          isCompleted ? 'bg-emerald-500' :
+                          'bg-slate-600'
+                        }`}>
+                          <IconComponent className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className={`font-bold text-sm ${
+                            isActive ? 'text-blue-300' :
+                            isCompleted ? 'text-emerald-300' :
+                            'text-slate-300'
+                          }`}>
+                            {step.title}
+                          </h4>
+                          <p className="text-xs text-slate-400">{step.description}</p>
+                        </div>
+                        {isCompleted && !isActive && (
+                          <FaCheckCircle className="w-4 h-4 text-emerald-400" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            
-            {/* Navegación por pestañas */}
-            <div className="pt-6 mt-6 border-t border-white border-opacity-20">
-              <div className="flex space-x-1">
-                <button
-                  onClick={() => setActiveTab('basic')}
-                  className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
-                    activeTab === 'basic'
-                      ? 'bg-white text-indigo-700'
-                      : 'text-white hover:bg-white hover:bg-opacity-10'
-                  }`}
-                >
-                  <FaInfoCircle className="inline mr-2" /> Información Básica
-                </button>
-                <button
-                  onClick={() => setActiveTab('evaluations')}
-                  className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
-                    activeTab === 'evaluations'
-                      ? 'bg-white text-indigo-700'
-                      : 'text-white hover:bg-white hover:bg-opacity-10'
-                  }`}
-                >
-                  <FaBalanceScale className="inline mr-2" /> Plan de Evaluación
-                </button>
-                <button
-                  onClick={() => setActiveTab('advanced')}
-                  className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
-                    activeTab === 'advanced'
-                      ? 'bg-white text-indigo-700'
-                      : 'text-white hover:bg-white hover:bg-opacity-10'
-                  }`}
-                >
-                  <FaCog className="inline mr-2" /> Configuración Avanzada
-                </button>
-              </div>
+
+            {/* Subject Preview */}
+            <div className="xl:block hidden">
+              <SubjectPreview
+                formData={formData}
+                evaluations={evaluations}
+                hasExam={hasExam}
+                examWeight={examWeight}
+                examThreshold={examThreshold}
+              />
             </div>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="p-8">
-            {renderTabContent()}
-            
-            <div className="flex justify-between pt-8 mt-8 border-t border-gray-200">
-              {activeTab !== 'basic' ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(activeTab === 'evaluations' ? 'basic' : 'evaluations')}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center"
-                >
-                  <FaArrowLeft className="mr-2" /> Anterior
-                </button>
-              ) : (
-                <div></div> 
-              )}
-              
-              {activeTab !== 'advanced' ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(activeTab === 'basic' ? 'evaluations' : 'advanced')}
-                  className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors flex items-center"
-                >
-                  Siguiente <FaArrowLeft className="ml-2 transform rotate-180" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className={`px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center transition-colors shadow-md ${isSubmitting ? 'opacity-70' : ''}`}
-                >
-                  {isSubmitting ? <FaSyncAlt className="mr-2 animate-spin" /> : <FaSave className="mr-2" />}
-                  {isSubmitting ? 'Guardando...' : 'Guardar asignatura'}
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-        
-        {hasExam && examInfo && examInfo.status === 'has-exam' && (
-          <div className="mt-8 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <FaGradCap className="h-6 w-6 text-indigo-600" />
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Información de eximición</h3>
-                <p className="mt-1 text-gray-600">
-                  Para esta asignatura, los estudiantes necesitan un promedio de <span className="font-semibold text-indigo-700">{examInfo.requiredAverage}</span> antes 
-                  del examen para eximirse. Si no alcanzan esta nota, deberán rendir el examen que vale {examInfo.examWeight}% adicional a la nota final.
-                </p>
-                <div className="mt-3 flex items-center">
-                  <span className="text-sm text-indigo-600 font-medium flex items-center">
-                    <FaClipboardCheck className="mr-1" /> 
-                    Nota de eximición configurada: {examThreshold}
-                  </span>
+          {/* Main Content */}
+          <div className="xl:col-span-9">
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 backdrop-blur-xl rounded-3xl border border-slate-600/30 shadow-2xl overflow-hidden">
+                {/* Form Header */}
+                <div className="bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-blue-600/20 border-b border-slate-600/30 p-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-4xl font-black bg-gradient-to-r from-white via-blue-200 to-white bg-clip-text text-transparent mb-2">
+                        {isEditing ? 'Editar Asignatura' : 'Nueva Asignatura'}
+                      </h1>
+                      <p className="text-slate-400 text-lg">
+                        {steps[currentStep].description}
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Paso</p>
+                        <p className="text-2xl font-black text-white">
+                          {currentStep + 1} / {steps.length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Content */}
+                <div className="p-8">
+                  {renderStepContent()}
+                </div>
+
+                {/* Form Footer */}
+                <div className="bg-slate-800/50 border-t border-slate-600/30 p-8">
+                  <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+                    <div className="flex items-center space-x-4">
+                      {currentStep > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setCurrentStep(currentStep - 1)}
+                          className="px-6 py-3 bg-slate-700/50 border border-slate-600/30 text-slate-300 hover:text-white hover:bg-slate-600/50 rounded-xl transition-all duration-300 flex items-center"
+                        >
+                          <FaArrowLeft className="mr-2 h-4 w-4" />
+                          Anterior
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      {currentStep < steps.length - 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => setCurrentStep(currentStep + 1)}
+                          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-bold transition-all duration-300 transform hover:scale-105 flex items-center shadow-lg"
+                        >
+                          Siguiente
+                          <FaChevronRight className="ml-2 h-4 w-4" />
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-black shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <FaSyncAlt className="mr-3 h-5 w-5 animate-spin" />
+                              Guardando...
+                            </>
+                          ) : (
+                            <>
+                              <FaSave className="mr-3 h-5 w-5" />
+                              {isEditing ? 'Actualizar Asignatura' : 'Crear Asignatura'}
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-        
-        <div className="mt-4 bg-white rounded-lg shadow p-6 border-l-4 border-indigo-500">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <FaRegClock className="h-6 w-6 text-indigo-600" />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Consejo de tiempo</h3>
-              <p className="mt-1 text-gray-600">
-                Recuerda que puedes completar este formulario por etapas. El sistema guardará tu progreso cuando hagas clic en "Guardar asignatura".
-              </p>
-              <div className="mt-3 flex items-center">
-                <span className="text-sm text-indigo-600 font-medium flex items-center">
-                  <FaClipboardList className="mr-1" /> 
-                  {formProgress < 50 
-                    ? 'Te falta completar información importante' 
-                    : formProgress < 100 
-                      ? 'Vas por buen camino, completa los detalles restantes' 
-                      : '¡Excelente! Has completado toda la información necesaria'}
-                </span>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>
-      
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.3s ease-out forwards;
-        }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.6; }
-        }
-        .animate-pulse {
-          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-      `}</style>
     </div>
   );
 };

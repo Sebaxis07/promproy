@@ -2,6 +2,8 @@ import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import asyncHandler from '../middleware/async.js';
 import ErrorResponse from '../utils/errorResponse.js';
+import crypto from 'crypto';
+import sendEmail from '../utils/sendEmail.js';
 
 // Mover esta función al inicio
 const sendTokenResponse = (user, statusCode, res) => {
@@ -112,4 +114,69 @@ export const verifyToken = asyncHandler(async (req, res, next) => {
   } catch (err) {
     return next(new ErrorResponse('No autorizado', 401));
   }
+});
+
+// @desc    Olvidó contraseña
+// @route   POST /api/auth/forgotpassword
+export const forgotPassword = asyncHandler(async (req, res, next) => {
+  const user = await User.findOne({ email: req.body.email });
+
+  if (!user) {
+    return next(new ErrorResponse('No existe usuario con ese email', 404));
+  }
+
+  // Obtener token de reset
+  const resetToken = user.getResetPasswordToken();
+
+  await user.save({ validateBeforeSave: false });
+
+  // Crear URL de reset
+  const resetUrl = `${req.protocol}://${req.get('host')}/api/auth/resetpassword/${resetToken}`;
+
+  const message = `Has recibido este email porque has solicitado restablecer tu contraseña. Por favor haz una petición PUT a: \n\n ${resetUrl}`;
+
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: 'Recuperación de contraseña',
+      message
+    });
+
+    res.status(200).json({ success: true, data: 'Email enviado' });
+  } catch (err) {
+    console.log(err);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Email no pudo ser enviado', 500));
+  }
+});
+
+// @desc    Reset password
+// @route   PUT /api/auth/resetpassword/:resettoken
+export const resetPassword = asyncHandler(async (req, res, next) => {
+  // Obtener token hasheado
+  const resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(req.params.resettoken)
+    .digest('hex');
+
+  const user = await User.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  });
+
+  if (!user) {
+    return next(new ErrorResponse('Token inválido', 400));
+  }
+
+  // Establecer nueva contraseña
+  user.password = req.body.password;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+  await user.save();
+
+  sendTokenResponse(user, 200, res);
 });

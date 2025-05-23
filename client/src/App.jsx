@@ -15,6 +15,8 @@ import Footer from './components/Layout/Footer';
 // Componentes de autenticación
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
+import ForgotPassword from './components/Auth/ForgotPassword';
+import ResetPassword from './components/Auth/ResetPassword';
 
 // Componentes principales
 import Dashboard from './components/Dashboard/Dashboard';
@@ -42,6 +44,8 @@ const App = () => {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/resetpassword/:resettoken" element={<ResetPassword />} />
                 
                 {/* Rutas protegidas */}
                 <Route 

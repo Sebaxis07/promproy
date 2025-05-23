@@ -89,7 +89,8 @@ export const deleteSubject = asyncHandler(async (req, res, next) => {
     );
   }
 
-  await subject.remove();
+  // Cambiar subject.remove() por findByIdAndDelete
+  await Subject.findByIdAndDelete(req.params.id);
 
   res.status(200).json({
     success: true,

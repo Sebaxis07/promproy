@@ -1,28 +1,46 @@
-import React, { useContext, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import { SubjectContext } from '../../context/SubjectContext';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  BarChart, Bar, PieChart, Pie, Cell
+} from 'recharts';
 import { 
   FaPlus, 
   FaChartLine, 
   FaBook, 
   FaCheckCircle, 
   FaTimesCircle, 
-  FaSearch, 
-  FaFilter, 
-  FaSortAmountDown, 
-  FaSortAmountUp,
   FaCalendarAlt,
-  FaDownload,
   FaChartBar,
-  FaSync,
   FaGraduationCap,
   FaClipboardList,
-  FaEye,
-  FaPencilAlt,
   FaExclamationTriangle,
-  FaTrash,
-  FaCog
+  FaTrophy,
+  FaFire,
+  FaStar,
+  FaBookOpen,
+  FaAward,
+  FaClock,
+  FaBell,
+  FaLightbulb,
+  FaTasks,
+  FaPlay,
+  FaPause,
+  FaEdit,
+  FaEye,
+  FaSync,
+  FaCalendarPlus,
+  FaChevronRight,
+  FaBrain,
+  FaRocket,
+  FaThumbsUp,
+  FaChevronDown,
+  FaChevronUp,
+  FaUserGraduate,
+  FaBullseye
 } from 'react-icons/fa';
 
 const Dashboard = () => {
@@ -30,949 +48,628 @@ const Dashboard = () => {
   const { subjects, loading, fetchSubjects, calculateWeightedAverage } = useContext(SubjectContext);
   
   const [refreshing, setRefreshing] = useState(false);
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all'); 
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedSemester, setSelectedSemester] = useState('Todos');
-  const [errorMessage, setErrorMessage] = useState('');
-  
-  const [semesters, setSemesters] = useState(['Todos']);
-  
-  useEffect(() => {
-    if (Array.isArray(subjects) && subjects.length > 0) {
-      const uniqueSemesters = ['Todos'];
-      subjects.forEach(subject => {
-        if (subject && subject.semester && !uniqueSemesters.includes(subject.semester)) {
-          uniqueSemesters.push(subject.semester);
-        }
-      });
-      setSemesters(uniqueSemesters.sort((a, b) => {
-        if (a === 'Todos') return -1;
-        if (b === 'Todos') return 1;
-        return b.localeCompare(a); 
-      }));
-    }
-  }, [subjects]);
+  const [studyTimer, setStudyTimer] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [selectedInsight, setSelectedInsight] = useState(0);
 
-  const refreshData = useCallback(async () => {
+  useEffect(() => {
+    fetchSubjects();
+  }, [fetchSubjects]);
+
+  // Timer de estudio
+  useEffect(() => {
+    let interval = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setStudyTimer(timer => timer + 1);
+      }, 1000);
+    } else if (!isTimerRunning && studyTimer !== 0) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, studyTimer]);
+
+  const formatTime = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const refreshData = async () => {
     setRefreshing(true);
-    setErrorMessage('');
-    
     try {
       await fetchSubjects();
     } catch (error) {
-      console.error("Error al actualizar los datos:", error);
-      setErrorMessage('No se pudieron cargar las asignaturas. Por favor, intenta nuevamente.');
+      console.error("Error al actualizar:", error);
     } finally {
-      setTimeout(() => setRefreshing(false), 500);
+      setTimeout(() => setRefreshing(false), 1000);
     }
-  }, [fetchSubjects]);
+  };
 
-  useEffect(() => {
-    refreshData();
-  }, [refreshData]);
-
-  useEffect(() => {
-    if (subjects === null || subjects === undefined) {
-      console.error("subjects es null o undefined:", subjects);
-      setErrorMessage('Los datos de asignaturas no están disponibles');
-    } else if (!Array.isArray(subjects)) {
-      console.error("subjects no es un array:", typeof subjects, subjects);
-      setErrorMessage('Formato de datos incorrecto');
-    } else {
-      setErrorMessage('');
-    }
-  }, [subjects]);
-
-  const calculateStats = () => {
+  // Calcular estadísticas avanzadas REALES
+  const stats = useMemo(() => {
     if (!Array.isArray(subjects) || subjects.length === 0) {
       return {
         totalSubjects: 0,
         passingSubjects: 0,
         failingSubjects: 0,
-        overallAverage: '0.0',
-        pendingAssignments: 0,
-        recentlyUpdated: 0,
-        averageProgress: 0
+        excellence: 0,
+        overallAverage: 0,
+        riskSubjects: [],
+        topPerformers: [],
+        subjectPerformance: [],
+        totalGrades: 0,
+        averageGradesPerSubject: 0,
+        recentActivity: []
       };
     }
 
     let totalAverage = 0;
     let validSubjects = 0;
     let passingSubjects = 0;
-    let failingSubjects = 0;
-    let pendingAssignments = 0;
-    let recentlyUpdated = 0;
-    let totalCredits = 0;
-    let earnedCredits = 0;
-    
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    let excellence = 0;
+    let totalGrades = 0;
+    const subjectPerformance = [];
+    const recentActivity = [];
 
     subjects.forEach(subject => {
       if (subject && subject._id) {
         try {
           const { average, passing } = calculateWeightedAverage(subject._id);
+          const gradesCount = subject.grades?.length || 0;
+          totalGrades += gradesCount;
+          
           if (typeof average === 'number' && !isNaN(average)) {
             totalAverage += average;
             validSubjects++;
             
-            if (passing) {
-              passingSubjects++;
-              if (subject.credits) {
-                earnedCredits += parseInt(subject.credits, 10) || 0;
-              }
-            } else {
-              failingSubjects++;
+            subjectPerformance.push({
+              name: subject.name,
+              average: average,
+              passing: passing,
+              grades: gradesCount,
+              teacher: subject.teacher,
+              semester: subject.semester,
+              id: subject._id
+            });
+            
+            if (passing) passingSubjects++;
+            if (average >= 6.0) excellence++;
+          }
+
+          // Actividad reciente basada en fechas reales
+          if (subject.updatedAt) {
+            const updateDate = new Date(subject.updatedAt);
+            const daysDiff = Math.floor((new Date() - updateDate) / (1000 * 60 * 60 * 24));
+            if (daysDiff <= 7) {
+              recentActivity.push({
+                subject: subject.name,
+                action: gradesCount > 0 ? 'Calificaciones actualizadas' : 'Asignatura creada',
+                date: updateDate,
+                daysAgo: daysDiff
+              });
             }
           }
-          
-          if (subject.credits) {
-            totalCredits += parseInt(subject.credits, 10) || 0;
-          }
-          
-          if (subject.grades) {
-            const pendingGrades = subject.grades.filter(grade => 
-              grade.dueDate && new Date(grade.dueDate) >= new Date() && !grade.score
-            );
-            pendingAssignments += pendingGrades.length;
-          }
-          
-          // Verificar si se actualizó recientemente con datos reales
-          const updatedAt = subject.updatedAt ? new Date(subject.updatedAt) : null;
-          if (updatedAt && updatedAt > oneWeekAgo) {
-            recentlyUpdated++;
-          }
         } catch (error) {
-          console.error(`Error calculando promedio para asignatura ${subject._id}:`, error);
+          console.error(`Error calculando promedio:`, error);
         }
       }
     });
 
-    const averageProgress = totalCredits > 0 ? Math.round((earnedCredits / totalCredits) * 100) : 0;
+    const overallAverage = validSubjects > 0 ? totalAverage / validSubjects : 0;
+    const riskSubjects = subjectPerformance.filter(s => !s.passing).sort((a, b) => a.average - b.average);
+    const topPerformers = subjectPerformance.filter(s => s.average >= 6.0).sort((a, b) => b.average - a.average);
+    const averageGradesPerSubject = validSubjects > 0 ? Math.round(totalGrades / validSubjects) : 0;
 
     return {
       totalSubjects: subjects.length,
       passingSubjects,
-      failingSubjects,
-      overallAverage: validSubjects > 0 ? (totalAverage / validSubjects).toFixed(1) : '0.0',
-      pendingAssignments,
-      recentlyUpdated,
-      averageProgress
+      failingSubjects: subjects.length - passingSubjects,
+      excellence,
+      overallAverage: overallAverage.toFixed(1),
+      riskSubjects,
+      topPerformers,
+      subjectPerformance,
+      totalGrades,
+      averageGradesPerSubject,
+      recentActivity: recentActivity.sort((a, b) => b.date - a.date)
     };
-  };
+  }, [subjects, calculateWeightedAverage]);
 
-  let stats;
-  try {
-    stats = calculateStats();
-  } catch (error) {
-    console.error("Error al calcular estadísticas:", error);
-    stats = {
-      totalSubjects: 0,
-      passingSubjects: 0,
-      failingSubjects: 0,
-      overallAverage: '0.0',
-      pendingAssignments: 0,
-      recentlyUpdated: 0,
-      averageProgress: 0
-    };
-  }
+  // Datos REALES para gráficos
+  const radarData = stats.subjectPerformance.slice(0, 6).map(subject => ({
+    subject: subject.name.length > 12 ? subject.name.substring(0, 12) + '...' : subject.name,
+    nota: Number(subject.average.toFixed(1)),
+    fullMark: 7
+  }));
 
-  const filteredSubjects = useMemo(() => {
-    if (!Array.isArray(subjects)) return [];
-    
-    return subjects.filter(subject => {
-      if (!subject || !subject._id) return false;
-      
-      // Filtro por búsqueda
-      const matchesSearch = !searchTerm || 
-        (subject.name && subject.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (subject.teacher && subject.teacher.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (subject.code && subject.code.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      let matchesStatus = true;
-      if (filterStatus !== 'all') {
-        try {
-          const { passing } = calculateWeightedAverage(subject._id);
-          matchesStatus = filterStatus === 'passing' ? passing : !passing;
-        } catch (error) {
-          console.error(`Error al filtrar por estado para ${subject._id}:`, error);
-          matchesStatus = false;
-        }
-      }
-      
-      const matchesSemester = selectedSemester === 'Todos' || subject.semester === selectedSemester;
-      
-      return matchesSearch && matchesStatus && matchesSemester;
-    });
-  }, [subjects, searchTerm, filterStatus, selectedSemester, calculateWeightedAverage]);
+  const performanceData = [
+    { name: 'Excelente (≥6.0)', value: stats.excellence, color: '#3B82F6' },
+    { name: 'Aprobando (4.0-5.9)', value: stats.passingSubjects - stats.excellence, color: '#10B981' },
+    { name: 'En Riesgo (<4.0)', value: stats.failingSubjects, color: '#EF4444' }
+  ].filter(item => item.value > 0);
 
-  const sortedSubjects = useMemo(() => {
-    if (!filteredSubjects || filteredSubjects.length === 0) return [];
-    
-    return [...filteredSubjects].sort((a, b) => {
-      if (!a || !b || !a._id || !b._id) return 0;
-      
-      let aValue, bValue;
-      
-      switch (sortField) {
-        case 'name':
-          aValue = a.name || '';
-          bValue = b.name || '';
-          break;
-        case 'teacher':
-          aValue = a.teacher || '';
-          bValue = b.teacher || '';
-          break;
-        case 'semester':
-          aValue = a.semester || '';
-          bValue = b.semester || '';
-          break;
-        case 'grades':
-          aValue = a.grades ? a.grades.length : 0;
-          bValue = b.grades ? b.grades.length : 0;
-          break;
-        case 'average':
-          try {
-            aValue = calculateWeightedAverage(a._id).average || 0;
-            bValue = calculateWeightedAverage(b._id).average || 0;
-          } catch (error) {
-            console.error(`Error al ordenar por promedio para ${a._id} o ${b._id}:`, error);
-            aValue = 0;
-            bValue = 0;
-          }
-          break;
-        default:
-          aValue = a.name || '';
-          bValue = b.name || '';
-      }
-      
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortDirection === 'asc' 
-          ? aValue.localeCompare(bValue) 
-          : bValue.localeCompare(aValue);
-      } else {
-        return sortDirection === 'asc' 
-          ? (aValue > bValue ? 1 : -1) 
-          : (aValue < bValue ? 1 : -1);
-      }
-    });
-  }, [filteredSubjects, sortField, sortDirection, calculateWeightedAverage]);
+  const gradeDistributionData = stats.subjectPerformance.map(subject => ({
+    name: subject.name.length > 10 ? subject.name.substring(0, 10) + '...' : subject.name,
+    promedio: Number(subject.average.toFixed(1)),
+    evaluaciones: subject.grades
+  }));
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+  // Insights inteligentes REALES
+  const insights = useMemo(() => {
+    const realInsights = [];
+
+    if (stats.topPerformers.length > 0) {
+      realInsights.push({
+        icon: <FaTrophy />,
+        title: "Tu Fortaleza Académica",
+        message: `Excelente rendimiento en ${stats.topPerformers[0].name} con ${stats.topPerformers[0].average.toFixed(1)}. ${stats.topPerformers.length > 1 ? `Y ${stats.topPerformers.length - 1} materias más con excelencia.` : ''}`,
+        type: "success"
+      });
     }
-  };
-  
-  const clearFilters = () => {
-    setSearchTerm('');
-    setFilterStatus('all');
-    setSelectedSemester('Todos');
-    setSortField('name');
-    setSortDirection('asc');
-  };
-  
-  const exportData = () => {
-    if (!Array.isArray(subjects) || subjects.length === 0) {
-      return;
-    }
-    
-    const csvData = subjects.map(subject => {
-      let average = 0;
-      let passing = false;
-      
-      try {
-        if (subject && subject._id) {
-          const result = calculateWeightedAverage(subject._id);
-          average = result.average || 0;
-          passing = result.passing || false;
-        }
-      } catch (error) {
-        console.error(`Error calculando promedio para ${subject?.name || 'asignatura'}:`, error);
-      }
-      
-      return {
-        asignatura: subject.name || '',
-        codigo: subject.code || '',
-        profesor: subject.teacher || '',
-        semestre: subject.semester || '',
-        creditos: subject.credits || '',
-        calificaciones: subject.grades ? subject.grades.length : 0,
-        promedio: average.toFixed(1),
-        estado: passing ? 'Aprobado' : 'En riesgo'
-      };
-    });
-    
-    const headers = ['Asignatura', 'Código', 'Profesor', 'Semestre', 'Créditos', 'Calificaciones', 'Promedio', 'Estado'];
-    let csvContent = headers.join(',') + '\n';
-    
-    csvData.forEach(row => {
-      const values = [
-        `"${row.asignatura}"`,
-        `"${row.codigo}"`,
-        `"${row.profesor}"`,
-        `"${row.semestre}"`,
-        row.creditos,
-        row.calificaciones,
-        row.promedio,
-        `"${row.estado}"`
-      ];
-      csvContent += values.join(',') + '\n';
-    });
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `asignaturas_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-  
-  const getRecommendations = () => {
-    const recommendations = [];
-    
-    if (stats.failingSubjects > 0) {
-      recommendations.push({
-        type: 'warning',
-        title: 'Asignaturas en riesgo',
-        message: `Tienes ${stats.failingSubjects} asignatura${stats.failingSubjects > 1 ? 's' : ''} en riesgo de reprobación. Revisa tus estrategias de estudio y considera buscar ayuda académica.`,
+
+    if (stats.riskSubjects.length > 0) {
+      realInsights.push({
         icon: <FaExclamationTriangle />,
-        color: 'red'
+        title: "Área de Oportunidad",
+        message: `${stats.riskSubjects[0].name} necesita atención (Promedio: ${stats.riskSubjects[0].average.toFixed(1)}). ${stats.riskSubjects.length > 1 ? `Y ${stats.riskSubjects.length - 1} materias más en riesgo.` : ''}`,
+        type: "warning"
       });
     }
-    
-    if (stats.pendingAssignments > 0) {
-      recommendations.push({
-        type: 'pending',
-        title: 'Evaluaciones pendientes',
-        message: `Tienes ${stats.pendingAssignments} evaluación${stats.pendingAssignments > 1 ? 'es' : ''} pendiente${stats.pendingAssignments > 1 ? 's' : ''}. Planifica tu tiempo para completarlas a tiempo y mejorar tus notas.`,
-        icon: <FaCalendarAlt />,
-        color: 'yellow'
+
+    if (stats.totalGrades > 0) {
+      const neededForTarget = Math.max(0, (5.5 * stats.totalSubjects) - (parseFloat(stats.overallAverage) * stats.totalSubjects));
+      realInsights.push({
+        icon: <FaBullseye />,
+        title: "Análisis Predictivo",
+        message: `Con ${stats.totalGrades} evaluaciones registradas, tu promedio actual es ${stats.overallAverage}. ${neededForTarget > 0 ? `Necesitas ${neededForTarget.toFixed(1)} puntos adicionales para alcanzar 5.5.` : '¡Estás por encima del objetivo!'}`,
+        type: "info"
       });
     }
-    
-    if (parseFloat(stats.overallAverage) >= 5.5) {
-      recommendations.push({
-        type: 'success',
-        title: 'Excelente promedio',
-        message: 'Mantén tu desempeño académico. Considera investigar oportunidades de becas o programas de excelencia académica.',
-        icon: <FaGraduationCap />,
-        color: 'green'
-      });
-    } else if (parseFloat(stats.overallAverage) >= 4.0 && parseFloat(stats.overallAverage) < 5.5) {
-      recommendations.push({
-        type: 'info',
-        title: 'Buen rendimiento',
-        message: 'Tu promedio es satisfactorio. Continúa con tu estrategia de estudio actual y considera mejorar en asignaturas específicas.',
-        icon: <FaChartLine />,
-        color: 'blue'
+
+    if (stats.recentActivity.length > 0) {
+      realInsights.push({
+        icon: <FaFire />,
+        title: "Actividad Reciente",
+        message: `${stats.recentActivity.length} actualizaciones en los últimos 7 días. Última actividad: ${stats.recentActivity[0].subject}.`,
+        type: "info"
       });
     }
-    
-    if (recommendations.length === 0) {
-      recommendations.push({
-        type: 'info',
-        title: 'Mejora tu rendimiento',
-        message: 'Usa la sección de análisis para identificar patrones y mejorar tus estrategias de estudio.',
-        icon: <FaChartBar />,
-        color: 'indigo'
+
+    if (realInsights.length === 0) {
+      realInsights.push({
+        icon: <FaRocket />,
+        title: "¡Comienza tu Journey!",
+        message: "Agrega asignaturas y calificaciones para ver insights personalizados sobre tu rendimiento académico.",
+        type: "info"
       });
     }
-    
-    return recommendations;
-  };
-  
-  const recommendations = getRecommendations();
 
-  return (
-    <div className="bg-gray-100 min-h-screen">
-      
+    return realInsights;
+  }, [stats]);
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="mb-8 bg-gradient-to-br from-indigo-700 to-purple-800 rounded-xl shadow-2xl text-white p-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div>
-              <div className="flex items-center">
-                <div className="mr-6 bg-white bg-opacity-20 p-4 rounded-lg">
-                  <FaGraduationCap className="h-10 w-10 text-indigo-200" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold">
-                    Bienvenido, {user?.name || 'Usuario'}
-                  </h1>
-                  <p className="mt-2 text-indigo-200">
-                    Sistema de gestión académica | Promedios según normativa chilena
-                  </p>
-                </div>
-              </div>
-              
-              <div className="mt-6 bg-indigo-900 bg-opacity-40 rounded-full h-4 w-full max-w-md">
-                <div 
-                  className="bg-gradient-to-r from-green-400 to-blue-400 h-4 rounded-full relative transition-all duration-500"
-                  style={{ width: `${stats.averageProgress}%` }}
-                >
-                  <span className="absolute -right-4 -top-6 bg-white text-indigo-800 px-2 py-0.5 rounded-md text-xs font-bold">
-                    {stats.averageProgress}%
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-indigo-200 mt-2">
-                Progreso académico: {stats.averageProgress}% completado
-              </p>
-            </div>
-            
-            <div className="mt-6 md:mt-0 flex flex-wrap gap-3">
-              <Link to="/analytics" className="btn bg-white text-indigo-700 hover:bg-indigo-50 flex items-center px-5 py-2.5 rounded-lg shadow-lg transition-all font-medium">
-                <FaChartBar className="mr-2" />
-                Análisis Avanzado
-              </Link>
-              <Link to="/calendar" className="btn bg-indigo-600 hover:bg-indigo-500 text-white flex items-center px-5 py-2.5 rounded-lg shadow-lg transition-all font-medium border border-indigo-400">
-                <FaCalendarAlt className="mr-2" />
-                Calendario
-              </Link>
-            </div>
-          </div>
-        </div>
+  // Próximas acciones basadas en datos reales
+  const nextActions = useMemo(() => {
+    const actions = [];
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-b-4 border-blue-500">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-blue-100 text-blue-700">
-                <FaBook className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-gray-500 text-sm font-medium">Asignaturas</p>
-                <p className="text-2xl font-bold">{stats.totalSubjects}</p>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-gray-500 text-xs">Total de cursos registrados</p>
-            </div>
-          </div>
+    if (stats.subjectPerformance.length === 0) {
+      actions.push({
+        title: "Crear primera asignatura",
+        description: "Comienza tu gestión académica",
+        link: "/subjects/new",
+        priority: "high",
+        icon: <FaPlus />
+      });
+    }
 
-          <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-b-4 border-green-500">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-green-100 text-green-600">
-                <FaCheckCircle className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-gray-500 text-sm font-medium">Aprobadas</p>
-                <p className="text-2xl font-bold">{stats.passingSubjects}</p>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-gray-500 text-xs">Asignaturas con nota ≥ 4.0</p>
-            </div>
-          </div>
+    stats.riskSubjects.slice(0, 2).forEach(subject => {
+      actions.push({
+        title: `Revisar ${subject.name}`,
+        description: `Promedio actual: ${subject.average.toFixed(1)}`,
+        link: `/subjects/${subject.id}`,
+        priority: "high",
+        icon: <FaExclamationTriangle />
+      });
+    });
 
-          <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-b-4 border-red-500">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-red-100 text-red-600">
-                <FaTimesCircle className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-gray-500 text-sm font-medium">En Riesgo</p>
-                <p className="text-2xl font-bold">{stats.failingSubjects}</p>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-gray-500 text-xs">Asignaturas con nota menor que 4.0</p>
-            </div>
-          </div>
+    if (stats.subjectPerformance.some(s => s.grades === 0)) {
+      const subjectWithoutGrades = stats.subjectPerformance.find(s => s.grades === 0);
+      actions.push({
+        title: `Agregar evaluaciones a ${subjectWithoutGrades.name}`,
+        description: "Sin calificaciones registradas",
+        link: `/subjects/${subjectWithoutGrades.id}`,
+        priority: "medium",
+        icon: <FaClipboardList />
+      });
+    }
 
-          <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-b-4 border-purple-500">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-purple-100 text-purple-600">
-                <FaChartLine className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-gray-500 text-sm font-medium">Promedio</p>
-                <p className={`text-2xl font-bold ${parseFloat(stats.overallAverage) >= 4.0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {stats.overallAverage}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-gray-500 text-xs">Promedio general acumulado</p>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-b-4 border-yellow-500">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-yellow-100 text-yellow-600">
-                <FaCalendarAlt className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-gray-500 text-sm font-medium">Pendientes</p>
-                <p className="text-2xl font-bold">{stats.pendingAssignments}</p>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-gray-500 text-xs">Evaluaciones por completar</p>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-b-4 border-indigo-500">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-indigo-100 text-indigo-600">
-                <FaClipboardList className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-gray-500 text-sm font-medium">Recientes</p>
-                <p className="text-2xl font-bold">{stats.recentlyUpdated}</p>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-gray-500 text-xs">Actualizadas últimos 7 días</p>
-            </div>
-          </div>
-        </div>
+    return actions.slice(0, 4);
+  }, [stats]);
 
-        <div className="bg-white rounded-xl shadow-xl p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <div className="flex items-center mb-4 md:mb-0">
-              <FaBook className="text-indigo-600 h-6 w-6 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-800">Tus Asignaturas</h2>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 w-full md:w-auto">
-              <div className="relative flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaSearch className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Buscar asignatura..."
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              
-              <button 
-                onClick={() => setShowFilters(!showFilters)}
-                className="btn bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center px-4 py-2 rounded-lg border border-gray-300 transition-all"
-              >
-                <FaFilter className="mr-2" />
-                Filtros {showFilters ? '▲' : '▼'}
-              </button>
-              
-              <Link
-                to="/subjects/new"
-                className="btn bg-indigo-600 hover:bg-indigo-700 text-white flex items-center px-4 py-2 rounded-lg shadow-sm transition-all"
-              >
-                <FaPlus className="mr-2" />
-                Nueva
-              </Link>
-            </div>
-          </div>
-          
-          {showFilters && (
-            <div className="bg-indigo-50 rounded-lg p-4 mb-6 border border-indigo-100 shadow-inner">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                  <select 
-                    className="w-full border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-white"
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <option value="all">Todos</option>
-                    <option value="passing">Aprobados</option>
-                    <option value="failing">En riesgo</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Semestre</label>
-                  <select 
-                    className="w-full border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-white"
-                    value={selectedSemester}
-                    onChange={(e) => setSelectedSemester(e.value)}
-                    >
-                      {semesters.map(semester => (
-                        <option key={semester} value={semester}>{semester}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ordenar por</label>
-                    <div className="flex space-x-2">
-                      <select 
-                        className="flex-grow border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-white"
-                        value={sortField}
-                        onChange={(e) => setSortField(e.target.value)}
-                      >
-                        <option value="name">Nombre</option>
-                        <option value="teacher">Profesor</option>
-                        <option value="semester">Semestre</option>
-                        <option value="grades">Calificaciones</option>
-                        <option value="average">Promedio</option>
-                      </select>
-                      <button
-                        className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 bg-white transition-all"
-                        onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                        aria-label={sortDirection === 'asc' ? "Ordenar descendente" : "Ordenar ascendente"}
-                      >
-                        {sortDirection === 'asc' ? <FaSortAmountUp /> : <FaSortAmountDown />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end mt-4">
-                  <button 
-                    onClick={clearFilters}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-                  >
-                    Limpiar filtros
-                  </button>
-                </div>
-              </div>
-            )}
-  
-            {loading || refreshing ? (
-              <div className="py-32 flex flex-col justify-center items-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600 mb-4"></div>
-                <p className="text-gray-500 text-lg">Cargando asignaturas...</p>
-              </div>
-            ) : errorMessage ? (
-              <div className="py-20 text-center bg-red-50 rounded-lg border-2 border-dashed border-red-300">
-                <div className="flex justify-center items-center text-red-500 mb-4">
-                  <FaExclamationTriangle className="h-12 w-12" />
-                </div>
-                <h3 className="text-lg font-medium text-red-800">{errorMessage}</h3>
-                <p className="mt-2 text-red-600">No se pudo acceder a los datos de las asignaturas. Por favor, intenta nuevamente.</p>
-                <button
-                  onClick={refreshData}
-                  className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all inline-flex items-center"
-                >
-                  <FaSync className="mr-2" />
-                  Reintentar
-                </button>
-              </div>
-            ) : !Array.isArray(subjects) ? (
-              <div className="py-20 text-center bg-red-50 rounded-lg border-2 border-dashed border-red-300">
-                <div className="flex justify-center items-center text-red-500 mb-4">
-                  <FaTimesCircle className="h-12 w-12" />
-                </div>
-                <h3 className="text-lg font-medium text-red-800">Error al cargar las asignaturas</h3>
-                <p className="mt-2 text-red-600">El formato de datos es incorrecto. Por favor, contacta al administrador.</p>
-                <button
-                  onClick={refreshData}
-                  className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all inline-flex items-center"
-                >
-                  <FaSync className="mr-2" />
-                  Reintentar
-                </button>
-              </div>
-            ) : subjects.length === 0 ? (
-              <div className="text-center py-20 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                <FaBook className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                <h3 className="text-xl font-medium text-gray-900 mb-2">No tienes asignaturas registradas</h3>
-                <p className="text-gray-600 max-w-md mx-auto mb-6">
-                  Comienza agregando tu primera asignatura para llevar un control detallado de tus calificaciones y promedios.
-                </p>
-                <Link
-                  to="/subjects/new"
-                  className="btn btn-primary inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md"
-                >
-                  <FaPlus className="mr-2" />
-                  Crear tu primera asignatura
-                </Link>
-              </div>
-            ) : sortedSubjects.length === 0 ? (
-              <div className="text-center py-16 bg-yellow-50 rounded-lg border-2 border-dashed border-yellow-300">
-                <FaSearch className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
-                <h3 className="text-xl font-medium text-yellow-800 mb-2">No se encontraron resultados</h3>
-                <p className="text-yellow-700 mb-4">No hay asignaturas que coincidan con los criterios de búsqueda.</p>
-                <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-all"
-                >
-                  Limpiar filtros
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="text-sm text-gray-500 mb-4 flex justify-between items-center">
-                  <span>Mostrando {sortedSubjects.length} de {subjects.length} asignaturas</span>
-                  {semesters.length > 1 && (
-                    <span className="text-indigo-600 text-xs bg-indigo-50 px-2 py-1 rounded-md">
-                      Último periodo académico: {semesters[1] || 'No disponible'}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-md">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th 
-                          className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-all"
-                          onClick={() => handleSort('name')}
-                        >
-                          <div className="flex items-center">
-                            Asignatura
-                            {sortField === 'name' && (
-                              <span className="ml-1">
-                                {sortDirection === 'asc' ? <FaSortAmountUp size={12} /> : <FaSortAmountDown size={12} />}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-all"
-                          onClick={() => handleSort('teacher')}
-                        >
-                          <div className="flex items-center">
-                            Profesor
-                            {sortField === 'teacher' && (
-                              <span className="ml-1">
-                                {sortDirection === 'asc' ? <FaSortAmountUp size={12} /> : <FaSortAmountDown size={12} />}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-all"
-                          onClick={() => handleSort('semester')}
-                        >
-                          <div className="flex items-center">
-                            Semestre
-                            {sortField === 'semester' && (
-                              <span className="ml-1">
-                                {sortDirection === 'asc' ? <FaSortAmountUp size={12} /> : <FaSortAmountDown size={12} />}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-all"
-                          onClick={() => handleSort('grades')}
-                        >
-                          <div className="flex items-center">
-                            Calificaciones
-                            {sortField === 'grades' && (
-                              <span className="ml-1">
-                                {sortDirection === 'asc' ? <FaSortAmountUp size={12} /> : <FaSortAmountDown size={12} />}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-all"
-                          onClick={() => handleSort('average')}
-                        >
-                          <div className="flex items-center">
-                            Promedio
-                            {sortField === 'average' && (
-                              <span className="ml-1">
-                                {sortDirection === 'asc' ? <FaSortAmountUp size={12} /> : <FaSortAmountDown size={12} />}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Estado
-                        </th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {sortedSubjects.map((subject) => {
-                        if (!subject || !subject._id) return null;
-                        
-                        let average = 0;
-                        let passing = false;
-                        
-                        try {
-                          const result = calculateWeightedAverage(subject._id);
-                          average = result.average || 0;
-                          passing = result.passing || false;
-                        } catch (error) {
-                          console.error(`Error calculando promedio para ${subject?.name || 'asignatura'}:`, error);
-                        }
-  
-                        // Calcular las evaluaciones pendientes para esta asignatura
-                        const pendingAssignments = subject.grades ? 
-                          subject.grades.filter(grade => 
-                            grade.dueDate && new Date(grade.dueDate) >= new Date() && !grade.score
-                          ).length : 0;
-  
-                        return (
-                          <tr key={subject._id} className="hover:bg-indigo-50 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <Link to={`/subjects/${subject._id}`} className="flex items-center group">
-                                <div 
-                                  className={`w-2 h-16 mr-3 rounded ${passing ? 'bg-green-500' : 'bg-red-500'} transition-all group-hover:w-3`}
-                                ></div>
-                                <div>
-                                  <div className="font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
-                                    {subject.name}
-                                  </div>
-                                  {subject.code && (
-                                    <div className="text-xs text-gray-500 mt-1">Código: {subject.code}</div>
-                                  )}
-                                  {subject.description && (
-                                    <div className="text-sm text-gray-600 truncate max-w-xs mt-1 italic">
-                                      {subject.description.length > 60 
-                                        ? `${subject.description.substring(0, 60)}...` 
-                                        : subject.description}
-                                    </div>
-                                  )}
-                                </div>
-                              </Link>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-gray-900 font-medium">{subject.teacher || 'No especificado'}</div>
-                              {subject.department && (
-                                <div className="text-xs text-gray-500 mt-1">{subject.department}</div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-1 rounded-md">
-                                {subject.semester || '-'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <span className="text-gray-900 font-medium mr-2">
-                                  {subject.grades ? subject.grades.length : 0}
-                                </span>
-                                {pendingAssignments > 0 && (
-                                  <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-1 rounded-full">
-                                    +{pendingAssignments} pendientes
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <span 
-                                  className={`font-bold text-lg ${passing ? 'text-green-600' : 'text-red-600'}`}
-                                >
-                                  {average.toFixed(1)}
-                                </span>
-                                <div className="ml-3 w-20 bg-gray-200 rounded-full h-2.5">
-                                  <div 
-                                    className={`h-2.5 rounded-full ${passing ? 'bg-green-500' : 'bg-red-500'}`}
-                                    style={{ width: `${Math.min(average / 7 * 100, 100)}%` }}
-                                  ></div>
-                                </div>
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                Nota mínima: {subject.passingGrade || 4.0}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {passing ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-                                  <FaCheckCircle className="mr-1" />
-                                  Aprobado
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 text-red-800">
-                                  <FaTimesCircle className="mr-1" />
-                                  En riesgo
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex justify-end space-x-2">
-                                <Link 
-                                  to={`/subjects/${subject._id}`} 
-                                  className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors flex items-center"
-                                  aria-label="Ver detalles"
-                                >
-                                  <FaEye className="mr-1" /> Ver
-                                </Link>
-                                <Link 
-                                  to={`/subjects/${subject._id}/edit`} 
-                                  className="text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 px-2 py-1 rounded transition-colors flex items-center"
-                                  aria-label="Editar asignatura"
-                                >
-                                  <FaPencilAlt className="mr-1" /> Editar
-                                </Link>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {sortedSubjects.length > 10 && (
-                  <div className="flex justify-between items-center mt-6">
-                    <div className="text-sm text-gray-500">
-                      Mostrando {sortedSubjects.length} {sortedSubjects.length === 1 ? 'resultado' : 'resultados'}
-                    </div>
-                    <div className="flex space-x-1">
-                      <button className="px-3 py-1 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-all">
-                        Anterior
-                      </button>
-                      <button className="px-3 py-1 border border-indigo-500 rounded-lg bg-indigo-600 text-white">
-                        1
-                      </button>
-                      <button className="px-3 py-1 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-all">
-                        2
-                      </button>
-                      <button className="px-3 py-1 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-all">
-                        Siguiente
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          
-          {!loading && Array.isArray(subjects) && subjects.length > 0 && (
-            <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 rounded-xl border border-indigo-100 p-6 mb-8 shadow-lg">
-              <div className="flex items-center mb-4">
-                <FaGraduationCap className="h-6 w-6 text-indigo-700 mr-3" />
-                <h3 className="text-xl font-bold text-indigo-900">Recomendaciones Personalizadas</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {recommendations.map((rec, index) => (
-                  <div 
-                    key={index}
-                    className={`bg-white rounded-lg p-4 shadow-md border-l-4 border-${rec.color}-500 hover:shadow-lg transition-all`}
-                  >
-                    <div className="flex items-start">
-                      <div className={`p-2 rounded-md bg-${rec.color}-100 text-${rec.color}-600 mr-3`}>
-                        {rec.icon}
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-800 mb-1">{rec.title}</h4>
-                        <p className="text-gray-600 text-sm">{rec.message}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-         
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-blue-200 text-lg">Cargando Academic Command Center...</p>
         </div>
       </div>
     );
-  };
-  
-  export default Dashboard;
+  }
+
+  return (
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
+        {/* Partículas de Fondo */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          {[...Array(25)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-blue-400/30 rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${3 + Math.random() * 2}s`
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header con Insights Inteligentes */}
+          <div className="mb-8 bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
+            <div className="p-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6">
+                <div>
+                  <div className="flex items-center mb-4">
+                    <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mr-4 shadow-2xl">
+                      <FaBrain className="h-8 w-8 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">
+                        Academic Command Center
+                      </h1>
+                      <p className="text-blue-200/80 text-lg">
+                        ¡Hola {user?.name}! Analítica y productividad académica
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={refreshData}
+                    disabled={refreshing}
+                    className="group px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 text-white rounded-xl transition-all duration-300 flex items-center"
+                  >
+                    <FaSync className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180'} transition-transform duration-500`} />
+                    {refreshing ? 'Actualizando' : 'Refresh'}
+                  </button>
+                  
+                  <Link 
+                    to="/subjects/new" 
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center"
+                  >
+                    <FaPlus className="mr-2 h-4 w-4" />
+                    Nueva Asignatura
+                  </Link>
+                </div>
+              </div>
+
+              {/* Insights Carousel */}
+              {insights.length > 0 && (
+                <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white flex items-center">
+                      <FaLightbulb className="mr-2 text-yellow-400" />
+                      Insights Inteligentes
+                    </h3>
+                    <div className="flex space-x-2">
+                      {insights.map((_, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setSelectedInsight(index)}
+                          className={`w-2 h-2 rounded-full transition-all ${
+                            selectedInsight === index ? 'bg-blue-400' : 'bg-white/30'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-4">
+                    <div className={`p-3 rounded-xl ${
+                      insights[selectedInsight].type === 'success' ? 'bg-green-500/20 text-green-400' :
+                      insights[selectedInsight].type === 'warning' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {insights[selectedInsight].icon}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white">{insights[selectedInsight].title}</h4>
+                      <p className="text-blue-200/80">{insights[selectedInsight].message}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Estadísticas Principales */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+            {[
+              { label: 'Asignaturas', value: stats.totalSubjects, icon: FaBook, gradient: 'from-blue-500 to-blue-600' },
+              { label: 'Aprobando', value: stats.passingSubjects, icon: FaCheckCircle, gradient: 'from-green-500 to-green-600' },
+              { label: 'En Riesgo', value: stats.failingSubjects, icon: FaTimesCircle, gradient: 'from-red-500 to-red-600' },
+              { label: 'Excelencia', value: stats.excellence, icon: FaTrophy, gradient: 'from-yellow-500 to-yellow-600' },
+              { label: 'Promedio', value: stats.overallAverage, icon: FaChartLine, gradient: 'from-purple-500 to-purple-600' },
+              { label: 'Evaluaciones', value: stats.totalGrades, icon: FaClipboardList, gradient: 'from-pink-500 to-pink-600' }
+            ].map((stat, index) => (
+              <div key={index} className="bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 hover:border-white/30 transition-all duration-500 transform hover:scale-105 shadow-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.gradient} shadow-lg`}>
+                    <stat.icon className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-white">{stat.value}</div>
+                    <div className="text-blue-200/70 text-sm font-medium">{stat.label}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Layout Principal: Analytics + Productividad */}
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* LADO IZQUIERDO: ANALYTICS */}
+            <div className="space-y-6">
+              {/* Gráfico de Radar - Rendimiento por Materia */}
+              {radarData.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <FaChartBar className="mr-2 text-blue-400" />
+                    Rendimiento por Asignatura
+                  </h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart data={radarData}>
+                        <PolarGrid stroke="#475569" />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#CBD5E1', fontSize: 12 }} />
+                        <PolarRadiusAxis 
+                          angle={90} 
+                          domain={[0, 7]} 
+                          tick={{ fill: '#CBD5E1', fontSize: 10 }}
+                          tickCount={4}
+                        />
+                        <Radar
+                          name="Promedio"
+                          dataKey="nota"
+                          stroke="#3B82F6"
+                          fill="#3B82F6"
+                          fillOpacity={0.3}
+                          strokeWidth={2}
+                        />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Distribución de Rendimiento */}
+              {performanceData.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <FaAward className="mr-2 text-blue-400" />
+                    Distribución de Rendimiento
+                  </h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={performanceData}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {performanceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1e293b', 
+                            border: '1px solid #475569',
+                            borderRadius: '8px',
+                            color: '#f1f5f9'
+                          }} 
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Promedios por Asignatura */}
+              {gradeDistributionData.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <FaChartLine className="mr-2 text-blue-400" />
+                    Promedios Detallados
+                  </h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={gradeDistributionData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                        <XAxis 
+                          dataKey="name" 
+                          tick={{ fill: '#CBD5E1', fontSize: 12 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis 
+                          tick={{ fill: '#CBD5E1' }}
+                          domain={[0, 7]}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1e293b', 
+                            border: '1px solid #475569',
+                            borderRadius: '8px',
+                            color: '#f1f5f9'
+                          }} 
+                        />
+                        <Bar dataKey="promedio" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* LADO DERECHO: PRODUCTIVIDAD */}
+            <div className="space-y-6">
+              {/* Timer de Estudio */}
+              <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                  <FaClock className="mr-2 text-blue-400" />
+                  Cronómetro de Estudio
+                </h3>
+                <div className="text-center">
+                  <div className="text-4xl font-mono font-bold text-white mb-4">
+                    {formatTime(studyTimer)}
+                  </div>
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => setIsTimerRunning(!isTimerRunning)}
+                      className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center ${
+                        isTimerRunning 
+                          ? 'bg-red-500 hover:bg-red-600 text-white' 
+                          : 'bg-green-500 hover:bg-green-600 text-white'
+                      }`}
+                    >
+                      {isTimerRunning ? <FaPause className="mr-2" /> : <FaPlay className="mr-2" />}
+                      {isTimerRunning ? 'Pausar' : 'Iniciar'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStudyTimer(0);
+                        setIsTimerRunning(false);
+                      }}
+                      className="px-6 py-3 bg-slate-600 hover:bg-slate-700 text-white rounded-xl font-semibold transition-all duration-300"
+                    >
+                      Reiniciar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Próximas Acciones */}
+              {nextActions.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <FaTasks className="mr-2 text-blue-400" />
+                    Acciones Recomendadas
+                  </h3>
+                  <div className="space-y-3">
+                    {nextActions.map((action, index) => (
+                      <Link
+                        key={index}
+                        to={action.link}
+                        className={`block p-4 rounded-xl border transition-all duration-300 hover:transform hover:scale-105 ${
+                          action.priority === 'high' 
+                            ? 'bg-red-500/10 border-red-400/30 hover:border-red-400/50' 
+                            : 'bg-blue-500/10 border-blue-400/30 hover:border-blue-400/50'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${
+                            action.priority === 'high' ? 'text-red-400' : 'text-blue-400'
+                          }`}>
+                            {action.icon}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-white">{action.title}</h4>
+                            <p className="text-blue-200/70 text-sm">{action.description}</p>
+                          </div>
+                          <FaChevronRight className="text-blue-400" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actividad Reciente */}
+              {stats.recentActivity.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <FaFire className="mr-2 text-orange-400" />
+                    Actividad Reciente
+                  </h3>
+                  <div className="space-y-3">
+                    {stats.recentActivity.slice(0, 5).map((activity, index) => (
+                      <div key={index} className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                        <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center">
+                          <FaBookOpen className="h-4 w-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-white font-medium">{activity.subject}</p>
+                          <p className="text-blue-200/70 text-sm">{activity.action}</p>
+                        </div>
+                        <div className="text-xs text-blue-300">
+                          {activity.daysAgo === 0 ? 'Hoy' : `${activity.daysAgo}d ago`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Acceso Rápido */}
+              <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 shadow-2xl">
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                  <FaRocket className="mr-2 text-blue-400" />
+                  Acceso Rápido
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <Link
+                    to="/subjects"
+                    className="p-4 bg-blue-500/10 border border-blue-400/30 rounded-xl hover:border-blue-400/50 transition-all duration-300 text-center group"
+                  >
+                    <FaBook className="h-6 w-6 text-blue-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                    <p className="text-white font-medium">Asignaturas</p>
+                  </Link>
+                  <Link
+                    to="/subjects/new"
+                    className="p-4 bg-green-500/10 border border-green-400/30 rounded-xl hover:border-green-400/50 transition-all duration-300 text-center group"
+                  >
+                    <FaPlus className="h-6 w-6 text-green-400 mx-auto mb-2 group-hover:rotate-90 transition-transform" />
+                    <p className="text-white font-medium">Nueva</p>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Estilos */}
+      <style jsx>{`
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
+    </>
+  );
+};
+
+export default Dashboard;

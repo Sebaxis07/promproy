@@ -2,6 +2,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -26,7 +27,9 @@ const UserSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpire: Date
 });
 
 // Asegurarse de que el hook pre-save funcione correctamente
@@ -55,6 +58,23 @@ UserSchema.methods.getSignedJwtToken = function() {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d'
   });
+};
+
+// Método para generar y hashear token de recuperación
+UserSchema.methods.getResetPasswordToken = function() {
+  // Generar token
+  const resetToken = crypto.randomBytes(20).toString('hex');
+
+  // Hashear token y guardarlo en la base de datos
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Establecer tiempo de expiración (10 minutos)
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
 };
 
 export default mongoose.model('User', UserSchema);
