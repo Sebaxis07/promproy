@@ -1,9 +1,10 @@
 import axios from 'axios';
 
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: '/api',  // Cambiamos a ruta relativa para usar el proxy de Vite
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   }
 });
 
@@ -17,6 +18,22 @@ axiosClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor para manejar errores
+axiosClient.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response) {
+      // Log detallado del error para debugging
+      console.error('Error Response:', {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+    }
     return Promise.reject(error);
   }
 );

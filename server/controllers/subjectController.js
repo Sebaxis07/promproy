@@ -99,6 +99,29 @@ export const deleteSubject = asyncHandler(async (req, res, next) => {
 });
 
 export const addGrade = asyncHandler(async (req, res, next) => {
+  console.log('Datos recibidos:', req.body); // Para debugging
+
+  // Validar los datos requeridos
+  const { evaluationName, value, weight } = req.body;
+  if (!evaluationName || !value || !weight) {
+    return next(
+      new ErrorResponse('Por favor proporcione todos los campos requeridos', 400)
+    );
+  }
+
+  // Validar el rango de los valores
+  if (value < 1.0 || value > 7.0) {
+    return next(
+      new ErrorResponse('La calificación debe estar entre 1.0 y 7.0', 400)
+    );
+  }
+
+  if (weight < 0 || weight > 100) {
+    return next(
+      new ErrorResponse('La ponderación debe estar entre 0 y 100', 400)
+    );
+  }
+
   const subject = await Subject.findById(req.params.id);
 
   if (!subject) {
@@ -107,7 +130,6 @@ export const addGrade = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Asegurarse de que el usuario es dueño de la asignatura
   if (subject.user.toString() !== req.user.id) {
     return next(
       new ErrorResponse(`Usuario no autorizado para agregar calificaciones a esta asignatura`, 401)

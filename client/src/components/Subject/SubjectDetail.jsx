@@ -157,7 +157,7 @@ const GradeStatusBadge = ({ grade }) => {
 };
 
 // Evaluation Card Component
-const EvaluationCard = ({ evaluation, grade, onAddGrade, onDeleteGrade, subjectId }) => {
+const EvaluationCard = ({ evaluation, grade, onAddGrade, onDeleteGrade, subjectId, setShowAddModal }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const hasGrade = !!grade;
@@ -232,7 +232,14 @@ const EvaluationCard = ({ evaluation, grade, onAddGrade, onDeleteGrade, subjectI
                   <FaClock className="w-8 h-8 text-slate-400 group-hover:text-blue-400 transition-colors" />
                 </div>
                 <button 
-                  onClick={() => onAddGrade(evaluation.name)}
+                  onClick={() => {
+                    setShowAddModal(true);
+                    onAddGrade({
+                      evaluationName: evaluation.name,
+                      weight: evaluation.weight,
+                      subjectId: subjectId
+                    });
+                  }}
                   className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-xl font-bold shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-200"
                 >
                   <FaPlus className="w-3 h-3 mr-1 inline" />
@@ -447,13 +454,16 @@ const PerformanceTimeline = ({ grades }) => {
 };
 
 // Add Grade Modal Component
-const AddGradeModal = ({ isOpen, onClose, evaluations, onSubmit, existingGrades }) => {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
-  const [selectedEvaluation, setSelectedEvaluation] = useState('');
+const AddGradeModal = ({ isOpen, onClose, evaluations, onSubmit, existingGrades, preSelectedEvaluation }) => {
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
+  const [selectedEvaluation, setSelectedEvaluation] = useState(preSelectedEvaluation || '');
 
-  const availableEvaluations = evaluations?.filter(
-    evalu => !existingGrades?.some(grade => grade.evaluationName === evalu.name)
-  ) || [];
+  useEffect(() => {
+    if (preSelectedEvaluation) {
+      setValue('evaluationName', preSelectedEvaluation);
+      setSelectedEvaluation(preSelectedEvaluation);
+    }
+  }, [preSelectedEvaluation, setValue]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -462,15 +472,47 @@ const AddGradeModal = ({ isOpen, onClose, evaluations, onSubmit, existingGrades 
     }
   }, [isOpen, reset]);
 
-  const handleFormSubmit = (data) => {
+  const handleFormSubmit = async (data) => {
+  try {
     const evaluation = evaluations.find(e => e.name === data.evaluationName);
-    onSubmit({
-      ...data,
+    if (!evaluation) {
+      toast.error('Evaluación no encontrada');
+      return;
+    }
+
+    // Format data correctly
+    const gradeData = {
+      evaluationName: evaluation.name,
       value: parseFloat(data.value),
-      weight: parseFloat(evaluation.weight)
-    });
+      weight: parseFloat(evaluation.weight),
+      note: data.note || '',
+      subjectId: evaluation.subjectId // Add this if needed by your API
+    };
+
+    // Validate data before sending
+    if (!gradeData.evaluationName || !gradeData.value || !gradeData.weight) {
+      toast.error('Faltan datos requeridos');
+      return;
+    }
+
+    // Validate grade range
+    if (gradeData.value < 1.0 || gradeData.value > 7.0) {
+      toast.error('La nota debe estar entre 1.0 y 7.0');
+      return;
+    }
+
+    console.log('Sending grade data:', gradeData); // Debug log
+    await onSubmit(gradeData);
     onClose();
-  };
+  } catch (error) {
+    console.error('Error en el formulario:', error);
+    toast.error('Error al guardar la calificación');
+  }
+};
+
+  const availableEvaluations = evaluations?.filter(
+    evalu => !existingGrades?.some(grade => grade.evaluationName === evalu.name)
+  ) || [];
 
   if (!isOpen) return null;
 
@@ -576,7 +618,6 @@ const AddGradeModal = ({ isOpen, onClose, evaluations, onSubmit, existingGrades 
   );
 };
 
-// Hook for Grade Prediction
 const useGradePrediction = (subject, targetGrade = 4.0) => {
   return useMemo(() => {
     if (!subject || !subject.grades || subject.grades.length === 0) {
@@ -639,8 +680,6 @@ const getRecommendations = (caseType, requiredAverage, progress) => {
     return recommendations.high;
   }
 };
-
-// Grade Prediction Widget
 const GradePredictionWidget = ({ subject, targetGrade = 4.0 }) => {
   const { requiredGrades, possible } = useGradePrediction(subject, targetGrade);
 
@@ -689,6 +728,7 @@ const SubjectDetail = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedView, setSelectedView] = useState('evaluations');
   const [gradeToDelete, setGradeToDelete] = useState(null);
+  const [selectedEvaluation, setSelectedEvaluation] = useState(null);
 
   const { average, passing } = useMemo(() => {
     if (!subject || !subject.grades || subject.grades.length === 0) {
@@ -712,17 +752,38 @@ const SubjectDetail = () => {
 
   const { requiredGrades, possible: predictionPossible } = useGradePrediction(subject, 4.0);
 
-  const handleAddGrade = async (gradeData) => {
-    try {
-      const result = await addGrade(id, gradeData);
-      if (result) {
-        toast.success('Calificación agregada exitosamente');
-        setShowAddModal(false);
-      }
-    } catch (error) {
-      toast.error('Error al agregar calificación');
+
+const handleAddGrade = async (gradeData) => {
+  try {
+    console.log('Adding grade with data:', gradeData); // Debug log
+
+    // Ensure all required fields are present
+    const finalData = {
+      subjectId: subject._id,
+      evaluationName: gradeData.evaluationName,
+      value: parseFloat(gradeData.value),
+      weight: parseFloat(gradeData.weight),
+      note: gradeData.note || ''
+    };
+
+    // Additional validations
+    if (!finalData.evaluationName || !finalData.value || !finalData.weight) {
+      toast.error('Faltan datos requeridos');
+      return;
     }
-  };
+
+    const result = await addGrade(subject._id, finalData);
+    if (result) {
+      toast.success('Calificación agregada exitosamente');
+      setShowAddModal(false);
+      // Optionally refresh the data
+      // await refreshSubjectData();
+    }
+  } catch (error) {
+    console.error('Error details:', error.response?.data); // Debug log
+    toast.error(error.response?.data?.message || 'Error al agregar la calificación');
+  }
+};
 
   const handleDeleteGrade = async (gradeId) => {
     try {
@@ -827,6 +888,7 @@ const SubjectDetail = () => {
                         onAddGrade={handleAddGrade} 
                         onDeleteGrade={handleDeleteGrade} 
                         subjectId={subject._id} 
+                        setShowAddModal={setShowAddModal}
                       />
                     ))}
                   </div>
@@ -1008,6 +1070,7 @@ const SubjectDetail = () => {
           evaluations={subject.evaluations} 
           onSubmit={handleAddGrade}
           existingGrades={subject.grades}
+          preSelectedEvaluation={selectedEvaluation?.evaluationName} // Agregar esta prop
         />
       )}
     </div>
