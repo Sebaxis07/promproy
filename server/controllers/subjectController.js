@@ -147,6 +147,7 @@ export const addGrade = asyncHandler(async (req, res, next) => {
 });
 
 export const deleteGrade = asyncHandler(async (req, res, next) => {
+  // Find subject first
   const subject = await Subject.findById(req.params.id);
 
   if (!subject) {
@@ -155,14 +156,14 @@ export const deleteGrade = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Asegurarse de que el usuario es dueño de la asignatura
+  // Check ownership
   if (subject.user.toString() !== req.user.id) {
     return next(
-      new ErrorResponse(`Usuario no autorizado para eliminar calificaciones de esta asignatura`, 401)
+      new ErrorResponse(`Usuario no autorizado para eliminar calificaciones`, 401)
     );
   }
 
-  // Encontrar el índice de la calificación
+  // Find grade index
   const gradeIndex = subject.grades.findIndex(
     grade => grade._id.toString() === req.params.gradeId
   );
@@ -173,12 +174,20 @@ export const deleteGrade = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Eliminar la calificación
-  subject.grades.splice(gradeIndex, 1);
-  await subject.save();
+  try {
+    // Remove grade from array
+    subject.grades.splice(gradeIndex, 1);
+    
+    // Save updated subject
+    await subject.save();
 
-  res.status(200).json({
-    success: true,
-    data: {}
-  });
+    res.status(200).json({
+      success: true,
+      data: {}
+    });
+  } catch (error) {
+    return next(
+      new ErrorResponse('Error al eliminar la calificación', 500)
+    );
+  }
 });

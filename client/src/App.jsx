@@ -15,7 +15,7 @@ import Footer from './components/Layout/Footer';
 // Componentes de autenticación
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
-import ForgotPassword from './components/Auth/ForgotPassword';
+import ForgotPassword from './components/Auth/ProfileSettings';
 import ResetPassword from './components/Auth/ResetPassword';
 
 // Componentes principales
@@ -24,6 +24,7 @@ import SubjectList from './components/Subject/SubjectList';
 import SubjectForm from './components/Subject/SubjectForm';
 import SubjectDetail from './components/Subject/SubjectDetail';
 import NotFound from './components/Layout/NotFound';
+import Settings from './components/Auth/Settings';
 
 // Rutas protegidas
 import PrivateRoute from './components/Auth/PrivateRoute';
@@ -53,6 +54,14 @@ const App = () => {
                   element={
                     <PrivateRoute>
                       <Dashboard />
+                    </PrivateRoute>
+                  } 
+                />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <PrivateRoute>
+                      <Settings />
                     </PrivateRoute>
                   } 
                 />

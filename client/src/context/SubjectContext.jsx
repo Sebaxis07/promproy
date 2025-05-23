@@ -150,38 +150,29 @@ const SubjectProvider = ({ children }) => {
 
   const deleteGrade = async (subjectId, gradeId) => {
     try {
-      setLoading(true);
-      await axiosClient.delete(`/subjects/${subjectId}/grades/${gradeId}`);
-      
-      setSubjects(prevSubjects => prevSubjects.map(subject => {
+      await axios.delete(`/api/subjects/${subjectId}/grades/${gradeId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      // Update local state
+      setSubjects(subjects.map(subject => {
         if (subject._id === subjectId) {
           return {
             ...subject,
-            grades: Array.isArray(subject.grades) 
-              ? subject.grades.filter(grade => grade._id !== gradeId)
-              : []
+            grades: subject.grades.filter(grade => grade._id !== gradeId)
           };
         }
         return subject;
       }));
-      
-      if (selectedSubject && selectedSubject._id === subjectId) {
-        setSelectedSubject({
-          ...selectedSubject,
-          grades: Array.isArray(selectedSubject.grades)
-            ? selectedSubject.grades.filter(grade => grade._id !== gradeId)
-            : []
-        });
-      }
-      
-      toast.success('Calificación eliminada con éxito');
-      return true;
+
+      toast.success('Calificación eliminada correctamente');
     } catch (error) {
       console.error('Error al eliminar calificación:', error);
-      toast.error('Error al eliminar la calificación');
-      return false;
-    } finally {
-      setLoading(false);
+      const errorMessage = error.response?.data?.error || 'Error al eliminar la calificación';
+      toast.error(errorMessage);
+      throw error;
     }
   };
 
